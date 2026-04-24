@@ -44,9 +44,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const recentes = useMemo(() => protocolos.slice(0, 5), [protocolos])
   const urgentes = useMemo(() => tarefas.filter(t => t.status !== 'concluida').slice(0, 5), [tarefas])
-  const agendaHoje = useMemo(() =>
-    agenda.filter(a => (a.data || '').slice(0, 10) === todayStr)
+
+  // Próximos compromissos: a partir de hoje, ordenados por data+horário, máx 7
+  const proximosCompromissos = useMemo(() =>
+    agenda
+      .filter(a => (a.data || '').slice(0, 10) >= todayStr && !a.realizado)
+      .sort((a, b) => {
+        const da = (a.data || '').slice(0, 10)
+        const db = (b.data || '').slice(0, 10)
+        if (da !== db) return da.localeCompare(db)
+        return (a.horario || '').localeCompare(b.horario || '')
+      })
+      .slice(0, 7)
   , [agenda, todayStr])
+
+  const isToday = (dateStr: string) => (dateStr || '').slice(0, 10) === todayStr
 
   return (
     <div className="p-4 h-full overflow-y-auto">
@@ -57,7 +69,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Alertas */}
       {(stats.vencidos > 0 || stats.vencendo > 0) && (
         <div className="mb-8 space-y-3">
           {stats.vencidos > 0 && (
@@ -133,7 +144,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-            <h3 className="font-bold mb-4 flex items-center gap-2"><CheckSquare size={18} className="text-primary-btn" /> Tarefas Urgentes</h3>
+            <h3 className="font-bold mb-4 flex items-center gap-2"><CheckSquare size={18} className="text-primary-btn" /> Tarefas Pendentes</h3>
             {urgentes.length > 0 ? (
               <div className="space-y-3">
                 {urgentes.map(t => (
@@ -156,23 +167,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         <div className="space-y-8">
           <div className="bg-sidebar-bg text-white p-4 rounded-xl shadow-lg">
-            <h3 className="font-bold mb-1 flex items-center gap-2"><Calendar size={18} className="text-active-highlight" /> Agenda de Hoje</h3>
-            <p className="text-xs text-white/40 mb-4">{agendaHoje.length} compromisso(s)</p>
-            {agendaHoje.length > 0 ? (
-              <div className="space-y-4">
-                {agendaHoje.map((a, idx) => (
+            <h3 className="font-bold mb-1 flex items-center gap-2"><Calendar size={18} className="text-active-highlight" /> Próximos Compromissos</h3>
+            <p className="text-xs text-white/40 mb-4">{proximosCompromissos.length} pendente(s)</p>
+            {proximosCompromissos.length > 0 ? (
+              <div className="space-y-3">
+                {proximosCompromissos.map((a, idx) => (
                   <div key={a.id ?? idx} className="flex gap-3 items-start border-l-2 border-active-highlight pl-3">
                     <div className="shrink-0 font-bold text-active-highlight text-sm">{a.horario || '--:--'}</div>
-                    <div>
-                      <p className="font-bold text-sm">{a.titulo || '(sem título)'}</p>
+                    <div className="min-w-0">
+                      <p className="font-bold text-sm leading-tight">{a.titulo}</p>
                       <p className="text-xs text-white/60 truncate">{a.pessoa_nome || 'Sem vínculo'}</p>
-                      <p className="text-xs text-white/40">{formatDate(a.data)}</p>
+                      <p className="text-xs mt-0.5">
+                        {isToday(a.data)
+                          ? <span className="text-active-highlight font-bold">Hoje</span>
+                          : <span className="text-white/40">{formatDate(a.data)}</span>
+                        }
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="py-8 text-center opacity-40"><p className="text-sm italic">Nenhum compromisso para hoje.</p></div>
+              <div className="py-8 text-center opacity-40"><p className="text-sm italic">Nenhum compromisso próximo.</p></div>
             )}
             <button onClick={() => onNavigate('Agenda')} className="w-full mt-6 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold transition-colors">Ver Agenda Completa</button>
           </div>
