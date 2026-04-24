@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sidebar-bg: #0B1D3A;
+  --color-primary-btn: #1A56DB;
+  --color-active-highlight: #F97316;
+  --color-surface-card: #F5F7FA;
+  --color-text-secondary: #6B7280;
+  --color-text-main: #111827;
+  --color-success: #16A34A;
+  --color-deadline-alert: #D97706;
+  --color-error-expired: #DC2626;
+  --color-main-bg: #FFFFFF;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
