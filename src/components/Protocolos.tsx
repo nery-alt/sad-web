@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, ArrowLeft, History, Send, Trash2, Search, Edit2, Phone, MapPin, CreditCard, CheckSquare } from 'lucide-react'
-import { Protocolo, Pessoa, Movimentacao, Tarefa } from '../types'
+import type { Protocolo, Pessoa, Movimentacao, Tarefa } from '../types'
 
 interface ProtocolosProps {
   protocolos: Protocolo[]

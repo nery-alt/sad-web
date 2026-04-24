@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { Plus, Calendar, CheckCircle, Trash2, Search } from 'lucide-react'
-import { AgendaItem } from '../types'
+import { Plus, CheckCircle, Trash2, Search } from 'lucide-react'
+import type { AgendaItem } from '../types'
 
 interface AgendaProps {
   agenda: AgendaItem[]

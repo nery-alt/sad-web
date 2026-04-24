@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { Settings, Save, Upload } from 'lucide-react'
-import { Config } from '../types'
+import { Settings, Save } from 'lucide-react'
+import type { Config } from '../types'
 
 interface ConfiguracoesProps {
   config: Config

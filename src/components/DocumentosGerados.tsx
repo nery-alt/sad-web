@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { FilePlus, ExternalLink, Trash2, Search } from 'lucide-react'
-import { DocumentoGerado, Pessoa } from '../types'
+import type { DocumentoGerado, Pessoa } from '../types'
 
 interface DocumentosGeradosProps {
   documentosGerados: DocumentoGerado[]
@@ -14,11 +14,11 @@ interface DocumentosGeradosProps {
 
 export const DocumentosGerados: React.FC<DocumentosGeradosProps> = ({
   documentosGerados,
-  pessoas,
+  pessoas: _pessoas,
   onOpenFile,
   onDeleteDocGerado,
-  onSelectPessoa,
-  onNavigate,
+  onSelectPessoa: _onSelectPessoa,
+  onNavigate: _onNavigate,
   formatDate,
 }) => {
   const [searchDoc, setSearchDoc] = useState('')

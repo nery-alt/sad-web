@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { ExternalLink, Trash2, Search } from 'lucide-react'
-import { DocumentoRecebido, Pessoa } from '../types'
+import type { DocumentoRecebido, Pessoa } from '../types'
 
 interface DocumentosRecebidosProps {
   documentos: DocumentoRecebido[]

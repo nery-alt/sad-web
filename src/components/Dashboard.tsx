@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import { Clock, CheckSquare, Calendar, AlertCircle, Bell } from 'lucide-react'
-import { Protocolo, Tarefa, AgendaItem } from '../types'
+import type { Protocolo, Tarefa, AgendaItem } from '../types'
 
 interface DashboardProps {
   protocolos: Protocolo[]

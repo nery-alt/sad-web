@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { Search, Users, FileText, Inbox, FilePlus, CheckSquare, Calendar } from 'lucide-react'
-import { Pessoa, Protocolo, DocumentoRecebido, DocumentoGerado, Tarefa, AgendaItem } from '../types'
+import type { Pessoa, Protocolo, DocumentoRecebido, DocumentoGerado, Tarefa, AgendaItem } from '../types'
 
 interface BuscaGlobalProps {
   pessoas: Pessoa[]

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { Plus, CheckSquare, Trash2, Search, X, Edit2, ExternalLink } from 'lucide-react'
-import { Tarefa, Pessoa, Protocolo } from '../types'
+import type { Tarefa, Pessoa, Protocolo } from '../types'
 
 interface TarefasProps {
   tarefas: Tarefa[]
@@ -37,7 +37,7 @@ export const Tarefas: React.FC<TarefasProps> = ({
   newTarefaInit,
   onClearNewTarefaInit,
   formatDate,
-  getPrazoStatus,
+  getPrazoStatus: _getPrazoStatus,
 }) => {
   const [searchTarefa, setSearchTarefa] = useState('')
   const [filterStatus, setFilterStatus] = useState('todos')

@@ -11,7 +11,7 @@ import { Tarefas } from './components/Tarefas'
 import { Agenda } from './components/Agenda'
 import { BuscaGlobal } from './components/BuscaGlobal'
 import { Configuracoes } from './components/Configuracoes'
-import {
+import type {
   Pessoa,
   Protocolo,
   DocumentoRecebido,
@@ -264,12 +264,6 @@ const App: React.FC = () => {
     await supabase.from('protocolos').update({ historico, atualizado_em: new Date().toISOString() }).eq('id', id)
     if (selectedProtocolo?.id === id)
       setSelectedProtocolo(prev => prev ? { ...prev, historico: JSON.stringify(historico) } : null)
-    fetchData()
-  }
-
-  const handleSaveDocumento = async (documento: DocumentoRecebido) => {
-    const { pessoa_nome, protocolo_numero, ...data } = documento
-    await supabase.from('documentos_recebidos').insert({ ...data, criado_em: new Date().toISOString() })
     fetchData()
   }
 
