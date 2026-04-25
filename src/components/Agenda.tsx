@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, CheckCircle, Trash2, Search, Edit2, X, Calendar, Clock, User, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
-import type { AgendaItem } from '../types'
+import type { AgendaItem, Pessoa, Protocolo } from '../types'
 
 interface AgendaProps {
   agenda: AgendaItem[]
+  pessoas: Pessoa[]
+  protocolos: Protocolo[]
   onSaveAgenda: (item: AgendaItem) => void
   onToggleRealizado: (id: number, realizado: number) => void
   onDeleteAgenda: (id: number) => void
@@ -13,8 +15,15 @@ interface AgendaProps {
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
+const EMPTY_FORM: AgendaItem = {
+  titulo: '', descricao: '', data: '', horario: '', realizado: 0, criado_em: '',
+  pessoa_id: undefined, protocolo_id: undefined,
+}
+
 export const Agenda: React.FC<AgendaProps> = ({
   agenda,
+  pessoas,
+  protocolos,
   onSaveAgenda,
   onToggleRealizado,
   onDeleteAgenda,
@@ -30,9 +39,7 @@ export const Agenda: React.FC<AgendaProps> = ({
   const [calMonth, setCalMonth] = useState(today.getMonth())
   const [calYear, setCalYear] = useState(today.getFullYear())
   const [view, setView] = useState<'calendar' | 'list'>('calendar')
-  const [formData, setFormData] = useState<AgendaItem>({
-    titulo: '', descricao: '', data: '', horario: '', realizado: 0, criado_em: ''
-  })
+  const [formData, setFormData] = useState<AgendaItem>({ ...EMPTY_FORM })
 
   const calDays = useMemo(() => {
     const firstDay = new Date(calYear, calMonth, 1).getDay()
@@ -77,6 +84,13 @@ export const Agenda: React.FC<AgendaProps> = ({
   ).sort((a, b) => (a.data || '').localeCompare(b.data || '') || (a.horario || '').localeCompare(b.horario || '')),
   [agenda, searchAgenda])
 
+  // Protocolos filtrados pela pessoa selecionada no formulário
+  const protocolosFiltrados = useMemo(() =>
+    formData.pessoa_id
+      ? protocolos.filter(p => p.pessoa_id === formData.pessoa_id)
+      : protocolos
+  , [protocolos, formData.pessoa_id])
+
   const prevMonth = () => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) } else setCalMonth(m => m - 1) }
   const nextMonth = () => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1) } else setCalMonth(m => m + 1) }
 
@@ -93,8 +107,12 @@ export const Agenda: React.FC<AgendaProps> = ({
   }
 
   const openNewForDate = (dateStr: string) => {
-    setFormData({ titulo: '', descricao: '', data: dateStr, horario: '', realizado: 0, criado_em: '' })
+    setFormData({ ...EMPTY_FORM, data: dateStr })
     setIsFormOpen(true)
+  }
+
+  const handlePessoaChange = (pessoaId: number | undefined) => {
+    setFormData(prev => ({ ...prev, pessoa_id: pessoaId, protocolo_id: undefined }))
   }
 
   return (
@@ -110,7 +128,7 @@ export const Agenda: React.FC<AgendaProps> = ({
             <button onClick={() => setView('list')} className={`px-4 py-2 text-sm font-bold transition-colors ${view === 'list' ? 'bg-primary-btn text-white' : 'text-text-secondary hover:text-text-main'}`}>Lista</button>
           </div>
           <button
-            onClick={() => { setFormData({ titulo: '', descricao: '', data: selectedDate, horario: '', realizado: 0, criado_em: '' }); setIsFormOpen(true) }}
+            onClick={() => { setFormData({ ...EMPTY_FORM, data: selectedDate }); setIsFormOpen(true) }}
             className="flex items-center gap-2 bg-primary-btn text-white px-5 py-2.5 rounded-lg font-bold hover:opacity-90 shadow-md text-sm"
           >
             <Plus size={18} /> Novo Compromisso
@@ -241,6 +259,7 @@ export const Agenda: React.FC<AgendaProps> = ({
         </div>
       )}
 
+      {/* Modal Visualização */}
       {selectedItem && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setSelectedItem(null)}>
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -274,6 +293,12 @@ export const Agenda: React.FC<AgendaProps> = ({
                   <div><p className="text-xs font-bold text-text-secondary uppercase">Pessoa</p><p className="text-sm font-medium">{selectedItem.pessoa_nome}</p></div>
                 </div>
               )}
+              {selectedItem.protocolo_numero && (
+                <div className="flex items-start gap-2">
+                  <FileText size={16} className="text-primary-btn mt-0.5 shrink-0" />
+                  <div><p className="text-xs font-bold text-text-secondary uppercase">Protocolo</p><p className="text-sm font-medium">{selectedItem.protocolo_numero}</p></div>
+                </div>
+              )}
               {selectedItem.descricao && (
                 <div className="flex items-start gap-2">
                   <FileText size={16} className="text-primary-btn mt-0.5 shrink-0" />
@@ -295,6 +320,7 @@ export const Agenda: React.FC<AgendaProps> = ({
         </div>
       )}
 
+      {/* Modal Criar/Editar */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -321,6 +347,40 @@ export const Agenda: React.FC<AgendaProps> = ({
                   <input type="time" className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none" value={formData.horario} onChange={e => setFormData({ ...formData, horario: e.target.value })} />
                 </div>
               </div>
+
+              {/* Vínculo opcional */}
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-xs font-bold text-text-secondary uppercase mb-3">Vínculo <span className="font-normal normal-case text-gray-400">(opcional)</span></p>
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Pessoa</label>
+                    <select
+                      className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none text-sm"
+                      value={formData.pessoa_id ?? ''}
+                      onChange={e => handlePessoaChange(e.target.value ? Number(e.target.value) : undefined)}
+                    >
+                      <option value="">— Nenhuma —</option>
+                      {pessoas.map(p => (
+                        <option key={p.id} value={p.id}>{p.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Protocolo</label>
+                    <select
+                      className="w-full p-3 bg-surface-card border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-btn/20 outline-none text-sm"
+                      value={formData.protocolo_id ?? ''}
+                      onChange={e => setFormData({ ...formData, protocolo_id: e.target.value ? Number(e.target.value) : undefined })}
+                    >
+                      <option value="">— Nenhum —</option>
+                      {protocolosFiltrados.map(p => (
+                        <option key={p.id} value={p.id}>{p.numero} — {p.assunto} — {p.pessoa_nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-4 pt-2">
                 <button type="button" onClick={() => setIsFormOpen(false)} className="px-6 py-3 text-text-secondary font-bold hover:text-text-main">Cancelar</button>
                 <button type="submit" className="px-8 py-3 bg-primary-btn text-white rounded-lg font-bold hover:opacity-90 shadow-lg">Salvar Compromisso</button>
