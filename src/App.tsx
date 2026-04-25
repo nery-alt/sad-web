@@ -314,15 +314,20 @@ const App: React.FC = () => {
   }
 
   const handleSaveAgenda = async (item: AgendaItem) => {
-    const now = new Date().toISOString()
-    const { pessoa_nome, protocolo_numero, ...data } = item
-    if (item.id) {
-      await supabase.from('agenda').update(data).eq('id', item.id)
-    } else {
-      await supabase.from('agenda').insert({ ...data, criado_em: now })
-    }
-    fetchData()
+  const now = new Date().toISOString()
+  const { pessoa_nome, protocolo_numero, ...data } = item
+  const payload = {
+    ...data,
+    pessoa_id: data.pessoa_id ?? null,
+    protocolo_id: data.protocolo_id ?? null,
   }
+  if (item.id) {
+    await supabase.from('agenda').update(payload).eq('id', item.id)
+  } else {
+    await supabase.from('agenda').insert({ ...payload, criado_em: now })
+  }
+  fetchData()
+}
 
   const handleToggleAgendaRealizado = async (id: number, currentRealizado: number) => {
     await supabase.from('agenda').update({ realizado: currentRealizado === 1 ? 0 : 1 }).eq('id', id)
