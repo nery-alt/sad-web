@@ -448,6 +448,8 @@ const App: React.FC = () => {
           {activeTab === 'Agenda' && (
             <Agenda
               agenda={agenda}
+              pessoas={pessoas}
+              protocolos={protocolos}
               onSaveAgenda={handleSaveAgenda}
               onToggleRealizado={handleToggleAgendaRealizado}
               onDeleteAgenda={handleDeleteAgenda}
