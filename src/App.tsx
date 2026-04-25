@@ -67,17 +67,33 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe()
   }, [])
 
+  // Dados + Realtime
   useEffect(() => {
     if (!session) return
+
     const onOnline = () => setIsOnline(true)
     const onOffline = () => setIsOnline(false)
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
+
     fetchData()
     fetchConfig()
+
+    // Realtime — qualquer mudança em qualquer tabela dispara fetchData
+    const channel = supabase
+      .channel('sad-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pessoas' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'protocolos' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos_recebidos' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos_gerados' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tarefas' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agenda' }, () => fetchData())
+      .subscribe()
+
     return () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
+      supabase.removeChannel(channel)
     }
   }, [session])
 
@@ -207,14 +223,12 @@ const App: React.FC = () => {
     } else {
       await supabase.from('pessoas').insert({ ...pessoa, criado_em: now, atualizado_em: now })
     }
-    fetchData()
   }
 
   const handleDeletePessoa = async (id: number) => {
     if (!window.confirm('Excluir esta pessoa e todo o seu dossiê?')) return
     await supabase.from('pessoas').delete().eq('id', id)
     setSelectedPessoa(null)
-    fetchData()
   }
 
   const handleImportDoc = async (pessoaId: number) => {
@@ -229,7 +243,6 @@ const App: React.FC = () => {
         pessoa_id: pessoaId, protocolo_id: null, nome: file.name, tipo: file.type,
         caminho: '', descricao: '', data_recebimento: dataRec, criado_em: new Date().toISOString()
       })
-      fetchData()
     }
     input.click()
   }
@@ -258,20 +271,17 @@ const App: React.FC = () => {
     } else {
       await supabase.from('protocolos').insert({ ...data, historico: [], criado_em: now, atualizado_em: now })
     }
-    fetchData()
   }
 
   const handleDeleteProtocolo = async (id: number) => {
     if (!window.confirm('Excluir este protocolo e seus vinculados?')) return
     await supabase.from('protocolos').delete().eq('id', id)
     setSelectedProtocolo(null)
-    fetchData()
   }
 
   const handleUpdateProtocoloStatus = async (id: number, newStatus: string) => {
     await supabase.from('protocolos').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
     if (selectedProtocolo?.id === id) setSelectedProtocolo(prev => prev ? { ...prev, status: newStatus as Protocolo['status'] } : null)
-    fetchData()
   }
 
   const handleAddMovimentacao = async (id: number, novaMovimentacao: string) => {
@@ -282,13 +292,11 @@ const App: React.FC = () => {
     await supabase.from('protocolos').update({ historico, atualizado_em: new Date().toISOString() }).eq('id', id)
     if (selectedProtocolo?.id === id)
       setSelectedProtocolo(prev => prev ? { ...prev, historico: JSON.stringify(historico) } : null)
-    fetchData()
   }
 
   const handleDeleteDocumento = async (id: number) => {
     if (!window.confirm('Remover o registro deste documento?')) return
     await supabase.from('documentos_recebidos').delete().eq('id', id)
-    fetchData()
   }
 
   const handleSaveDocumentoGerado = async (documento: DocumentoGerado) => {
@@ -299,13 +307,11 @@ const App: React.FC = () => {
     } else {
       await supabase.from('documentos_gerados').insert({ ...data, criado_em: now })
     }
-    fetchData()
   }
 
   const handleDeleteDocumentoGerado = async (id: number) => {
     if (!window.confirm('Excluir este documento gerado?')) return
     await supabase.from('documentos_gerados').delete().eq('id', id)
-    fetchData()
   }
 
   const handleSaveTarefa = async (tarefa: Tarefa) => {
@@ -316,19 +322,16 @@ const App: React.FC = () => {
     } else {
       await supabase.from('tarefas').insert({ ...data, criado_em: now, atualizado_em: now })
     }
-    fetchData()
   }
 
   const handleToggleTarefaStatus = async (id: number, currentStatus: string) => {
     const newStatus = currentStatus === 'concluida' ? 'pendente' : 'concluida'
     await supabase.from('tarefas').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
-    fetchData()
   }
 
   const handleDeleteTarefa = async (id: number) => {
     if (!window.confirm('Excluir esta tarefa?')) return
     await supabase.from('tarefas').delete().eq('id', id)
-    fetchData()
   }
 
   const handleSaveAgenda = async (item: AgendaItem) => {
@@ -347,18 +350,15 @@ const App: React.FC = () => {
     } else {
       await supabase.from('agenda').insert({ ...payload, criado_em: now })
     }
-    fetchData()
   }
 
   const handleToggleAgendaRealizado = async (id: number, currentRealizado: number) => {
     await supabase.from('agenda').update({ realizado: currentRealizado === 1 ? 0 : 1 }).eq('id', id)
-    fetchData()
   }
 
   const handleDeleteAgenda = async (id: number) => {
     if (!window.confirm('Excluir este compromisso?')) return
     await supabase.from('agenda').delete().eq('id', id)
-    fetchData()
   }
 
   const handleSaveConfig = async (newConfig: Config) => {
@@ -374,7 +374,6 @@ const App: React.FC = () => {
     await supabase.auth.signOut()
   }
 
-  // Tela de carregamento inicial
   if (loadingAuth) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -386,12 +385,10 @@ const App: React.FC = () => {
     )
   }
 
-  // Tela de login
   if (!session) {
     return <Login />
   }
 
-  // App principal
   return (
     <div className="flex h-screen w-full overflow-hidden font-sans">
       <Sidebar activeTab={activeTab} onTabChange={handleNavigate} onLogout={handleLogout} />
