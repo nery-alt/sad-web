@@ -315,11 +315,14 @@ const App: React.FC = () => {
 
 const handleSaveAgenda = async (item: AgendaItem) => {
   const now = new Date().toISOString()
-  const { pessoa_nome, protocolo_numero, criado_em, ...data } = item
   const payload = {
-    ...data,
-    pessoa_id: data.pessoa_id ?? null,
-    protocolo_id: data.protocolo_id ?? null,
+    titulo: item.titulo,
+    descricao: item.descricao || '',
+    data: item.data,
+    horario: item.horario || '',
+    realizado: item.realizado ?? 0,
+    pessoa_id: item.pessoa_id ?? null,
+    protocolo_id: item.protocolo_id ?? null,
   }
   if (item.id) {
     await supabase.from('agenda').update(payload).eq('id', item.id)
