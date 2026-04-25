@@ -313,9 +313,9 @@ const App: React.FC = () => {
     fetchData()
   }
 
-  const handleSaveAgenda = async (item: AgendaItem) => {
+const handleSaveAgenda = async (item: AgendaItem) => {
   const now = new Date().toISOString()
-  const { pessoa_nome, protocolo_numero, ...data } = item
+  const { pessoa_nome, protocolo_numero, criado_em, ...data } = item
   const payload = {
     ...data,
     pessoa_id: data.pessoa_id ?? null,
