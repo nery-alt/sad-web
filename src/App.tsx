@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
+import { Login } from './components/Login'
 import { Sidebar } from './components/Sidebar'
 import { Topbar } from './components/Topbar'
 import { Dashboard } from './components/Dashboard'
@@ -21,8 +22,12 @@ import type {
   Config,
   Movimentacao,
 } from './types'
+import type { Session } from '@supabase/supabase-js'
 
 const App: React.FC = () => {
+  const [session, setSession] = useState<Session | null>(null)
+  const [loadingAuth, setLoadingAuth] = useState(true)
+
   const [activeTab, setActiveTab] = useState('Dashboard')
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
@@ -50,7 +55,20 @@ const App: React.FC = () => {
     nomeUsuario: '', nomeSetor: '', cargo: '', logomarca: '', assinaturaPadrao: '', cidade: '', uf: ''
   })
 
+  // Auth listener
   useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setLoadingAuth(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!session) return
     const onOnline = () => setIsOnline(true)
     const onOffline = () => setIsOnline(false)
     window.addEventListener('online', onOnline)
@@ -61,7 +79,7 @@ const App: React.FC = () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
     }
-  }, [])
+  }, [session])
 
   const fetchData = async () => {
     const { data: p } = await supabase.from('pessoas').select('*').order('nome')
@@ -313,24 +331,24 @@ const App: React.FC = () => {
     fetchData()
   }
 
-const handleSaveAgenda = async (item: AgendaItem) => {
-  const now = new Date().toISOString()
-  const payload = {
-    titulo: item.titulo,
-    descricao: item.descricao || '',
-    data: item.data,
-    horario: item.horario || '',
-    realizado: item.realizado ?? 0,
-    pessoa_id: item.pessoa_id ?? null,
-    protocolo_id: item.protocolo_id ?? null,
+  const handleSaveAgenda = async (item: AgendaItem) => {
+    const now = new Date().toISOString()
+    const payload = {
+      titulo: item.titulo,
+      descricao: item.descricao || '',
+      data: item.data,
+      horario: item.horario || '',
+      realizado: item.realizado ?? 0,
+      pessoa_id: item.pessoa_id ?? null,
+      protocolo_id: item.protocolo_id ?? null,
+    }
+    if (item.id) {
+      await supabase.from('agenda').update(payload).eq('id', item.id)
+    } else {
+      await supabase.from('agenda').insert({ ...payload, criado_em: now })
+    }
+    fetchData()
   }
-  if (item.id) {
-    await supabase.from('agenda').update(payload).eq('id', item.id)
-  } else {
-    await supabase.from('agenda').insert({ ...payload, criado_em: now })
-  }
-  fetchData()
-}
 
   const handleToggleAgendaRealizado = async (id: number, currentRealizado: number) => {
     await supabase.from('agenda').update({ realizado: currentRealizado === 1 ? 0 : 1 }).eq('id', id)
@@ -351,9 +369,32 @@ const handleSaveAgenda = async (item: AgendaItem) => {
     setConfig(newConfig)
   }
 
+  const handleLogout = async () => {
+    if (!window.confirm('Deseja sair do sistema?')) return
+    await supabase.auth.signOut()
+  }
+
+  // Tela de carregamento inicial
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400 text-sm">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Tela de login
+  if (!session) {
+    return <Login />
+  }
+
+  // App principal
   return (
     <div className="flex h-screen w-full overflow-hidden font-sans">
-      <Sidebar activeTab={activeTab} onTabChange={handleNavigate} />
+      <Sidebar activeTab={activeTab} onTabChange={handleNavigate} onLogout={handleLogout} />
 
       <main className="flex-1 flex flex-col bg-main-bg overflow-hidden">
         <Topbar
@@ -361,6 +402,7 @@ const handleSaveAgenda = async (item: AgendaItem) => {
           selectedPessoaNome={selectedPessoa?.nome}
           selectedProtocoloNumero={selectedProtocolo?.numero}
           isOnline={isOnline}
+          userEmail={session.user.email}
         />
 
         <div className="flex-1 overflow-hidden">
