@@ -1,14 +1,15 @@
 import React from 'react'
-import { 
-  LayoutDashboard, 
-  Users, 
-  FileText, 
-  Inbox, 
-  FilePlus, 
-  Calendar, 
-  CheckSquare, 
-  Search, 
-  Settings
+import {
+  LayoutDashboard,
+  Users,
+  FileText,
+  Inbox,
+  FilePlus,
+  Calendar,
+  CheckSquare,
+  Search,
+  Settings,
+  LogOut,
 } from 'lucide-react'
 
 interface MenuItem {
@@ -19,9 +20,10 @@ interface MenuItem {
 interface SidebarProps {
   activeTab: string
   onTabChange: (tab: string) => void
+  onLogout: () => void
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, onLogout }) => {
   const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { name: 'Pessoas / Dossiês', icon: <Users size={20} /> },
@@ -42,12 +44,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
       </div>
       <nav className="flex-1 overflow-y-auto py-4">
         {menuItems.map((item) => (
-          <button 
-            key={item.name} 
-            onClick={() => onTabChange(item.name)} 
+          <button
+            key={item.name}
+            onClick={() => onTabChange(item.name)}
             className={`w-full flex items-center gap-3 px-6 py-3 transition-colors cursor-pointer ${
-              activeTab === item.name 
-                ? 'bg-active-highlight text-white' 
+              activeTab === item.name
+                ? 'bg-active-highlight text-white'
                 : 'text-white/70 hover:bg-white/5 hover:text-white'
             }`}
           >
@@ -56,6 +58,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
           </button>
         ))}
       </nav>
+      <div className="border-t border-white/10 p-4">
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-white/60 hover:bg-white/10 hover:text-white transition-colors"
+        >
+          <LogOut size={18} />
+          <span className="text-sm font-medium">Sair</span>
+        </button>
+      </div>
     </aside>
   )
 }
