@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Plus, ArrowLeft, Edit, Trash2, User, Building2, MapPin, FileText, Inbox, FilePlus, ExternalLink, Search, CheckSquare } from 'lucide-react'
+import { Plus, ArrowLeft, Edit, Trash2, User, Building2, MapPin, FileText, Inbox, FilePlus, ExternalLink, Search, CheckSquare, Upload, Loader } from 'lucide-react'
 import type { Pessoa, Protocolo, DocumentoRecebido, DocumentoGerado, Tarefa } from '../types'
 
 interface PessoasProps {
@@ -12,9 +12,9 @@ interface PessoasProps {
   onSelectPessoa: (pessoa: Pessoa | null) => void
   onSavePessoa: (pessoa: Pessoa) => void
   onDeletePessoa: (id: number) => void
-  onImportDoc: (pessoaId: number) => void
+  onImportDoc: (pessoaId: number, file: File) => Promise<void>
   onOpenFile: (path: string) => void
-  onDeleteDoc: (id: number) => void
+  onDeleteDoc: (id: number, caminho?: string) => void
   onDeleteDocGerado: (id: number) => void
   onNewDocGerado: (pessoa: Pessoa) => void
   onEditDocGerado: (doc: DocumentoGerado) => void
@@ -43,6 +43,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
 }) => {
   const [searchPessoa, setSearchPessoa] = useState('')
   const [isPessoaFormOpen, setIsPessoaFormOpen] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [pessoaFormData, setPessoaFormData] = useState<Pessoa>({
     nome: '', cpf: '', telefone: '', endereco: '', email: '', orgao: '', observacoes: '', status_ocorrencia: 'em_aberto', criado_em: '', atualizado_em: ''
   })
@@ -78,6 +79,27 @@ export const Pessoas: React.FC<PessoasProps> = ({
     setIsPessoaFormOpen(false)
   }
 
+  const handleImportClick = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx,.txt'
+    input.onchange = async () => {
+      const file = input.files?.[0]
+      if (!file || !selectedPessoa) return
+      if (file.size > 20 * 1024 * 1024) {
+        alert('Arquivo muito grande. O limite é 20MB.')
+        return
+      }
+      setUploading(true)
+      try {
+        await onImportDoc(selectedPessoa.id!, file)
+      } finally {
+        setUploading(false)
+      }
+    }
+    input.click()
+  }
+
   const getStatusOcorrenciaBadge = (status?: string) => {
     switch (status) {
       case 'concluido': return { label: 'Concluído', color: 'bg-success/10 text-success' }
@@ -88,12 +110,14 @@ export const Pessoas: React.FC<PessoasProps> = ({
   }
 
   const getFileIcon = (type: string) => {
-    const t = type.toLowerCase()
-    if (['jpg', 'jpeg', 'png'].includes(t)) return '🖼️'
-    if (t === 'pdf') return '📄'
-    if (t === 'docx' || t === 'doc') return '📝'
+    const t = (type || '').toLowerCase()
+    if (['jpg', 'jpeg', 'png', 'image/jpeg', 'image/png'].includes(t)) return '🖼️'
+    if (t === 'pdf' || t === 'application/pdf') return '📄'
+    if (['docx', 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(t)) return '📝'
     return '📋'
   }
+
+  const isCloudFile = (caminho?: string) => caminho?.startsWith('http')
 
   if (selectedPessoa) {
     return (
@@ -177,21 +201,33 @@ export const Pessoas: React.FC<PessoasProps> = ({
           <div>
             <div className="flex justify-between items-center mb-2">
               <h3 className="font-bold text-sm flex items-center gap-2"><Inbox size={16} /> Documentos Recebidos ({pessoaDocumentos.length})</h3>
-              <button onClick={() => onImportDoc(selectedPessoa.id!)} className="flex items-center gap-1 px-2 py-1 bg-primary-btn text-white rounded text-xs hover:opacity-90"><Plus size={14} /> Importar</button>
+              <button
+                onClick={handleImportClick}
+                disabled={uploading}
+                className="flex items-center gap-1 px-2 py-1 bg-primary-btn text-white rounded text-xs hover:opacity-90 disabled:opacity-60"
+              >
+                {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
+                {uploading ? 'Enviando...' : 'Importar'}
+              </button>
             </div>
             {pessoaDocumentos.length === 0 ? (
               <p className="text-xs text-text-secondary bg-surface-card p-3 rounded-lg">Nenhum documento</p>
             ) : (
-              <div className="space-y-1 max-h-32 overflow-y-auto">
+              <div className="space-y-1 max-h-40 overflow-y-auto">
                 {pessoaDocumentos.map(d => (
                   <div key={d.id} className="text-xs bg-white p-2 px-3 rounded-lg border border-gray-100 flex justify-between items-center group">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <span>{getFileIcon(d.tipo)}</span>
                       <span className="truncate font-bold">{d.nome}</span>
+                      {isCloudFile(d.caminho) && (
+                        <span className="shrink-0 text-[9px] font-bold bg-success/10 text-success px-1 rounded">NUVEM</span>
+                      )}
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => onOpenFile(d.caminho!)} className="p-1 text-primary-btn hover:bg-primary-btn/10 rounded"><ExternalLink size={14} /></button>
-                      <button onClick={() => onDeleteDoc(d.id!)} className="p-1 text-error-expired hover:bg-error-expired/10 rounded"><Trash2 size={14} /></button>
+                      {isCloudFile(d.caminho) && (
+                        <button onClick={() => onOpenFile(d.caminho!)} className="p-1 text-primary-btn hover:bg-primary-btn/10 rounded" title="Abrir arquivo"><ExternalLink size={14} /></button>
+                      )}
+                      <button onClick={() => onDeleteDoc(d.id!, d.caminho)} className="p-1 text-error-expired hover:bg-error-expired/10 rounded" title="Excluir"><Trash2 size={14} /></button>
                     </div>
                   </div>
                 ))}
@@ -215,7 +251,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
                       <span className="text-text-secondary ml-2">{d.tipo}</span>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {d.caminho && <button onClick={e => { e.stopPropagation(); onOpenFile(d.caminho!) }} className="p-1 text-primary-btn hover:bg-primary-btn/10 rounded"><ExternalLink size={14} /></button>}
+                      {d.caminho && isCloudFile(d.caminho) && <button onClick={e => { e.stopPropagation(); onOpenFile(d.caminho!) }} className="p-1 text-primary-btn hover:bg-primary-btn/10 rounded"><ExternalLink size={14} /></button>}
                       <button onClick={e => { e.stopPropagation(); onDeleteDocGerado(d.id!) }} className="p-1 text-error-expired hover:bg-error-expired/10 rounded"><Trash2 size={14} /></button>
                     </div>
                   </div>
