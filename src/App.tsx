@@ -24,6 +24,8 @@ import type {
 } from './types'
 import type { Session } from '@supabase/supabase-js'
 
+const BUCKET = 'documentos'
+
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null)
   const [loadingAuth, setLoadingAuth] = useState(true)
@@ -138,7 +140,6 @@ const App: React.FC = () => {
       supabase.removeChannel(channelRef.current)
       channelRef.current = null
     }
-
     const channel = supabase
       .channel(`sad-realtime-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pessoas' }, () => fetchData())
@@ -149,7 +150,6 @@ const App: React.FC = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'agenda' }, () => fetchData())
       .subscribe((status) => {
         if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          // Reconecta automaticamente após 5 segundos
           if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
           reconnectTimerRef.current = setTimeout(() => {
             setupRealtime()
@@ -157,34 +157,19 @@ const App: React.FC = () => {
           }, 5000)
         }
       })
-
     channelRef.current = channel
   }, [fetchData])
 
-  // Dados + Realtime
   useEffect(() => {
     if (!session) return
-
-    const onOnline = () => {
-      setIsOnline(true)
-      // Quando voltar a internet, recarrega dados e reconecta Realtime
-      fetchData()
-      setupRealtime()
-    }
+    const onOnline = () => { setIsOnline(true); fetchData(); setupRealtime() }
     const onOffline = () => setIsOnline(false)
-
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
-
     fetchData()
     fetchConfig()
     setupRealtime()
-
-    // Detector de tela branca — verifica a cada 30s se os dados estão vazios e recarrega
-    const healthCheck = setInterval(() => {
-      if (navigator.onLine) fetchData()
-    }, 30000)
-
+    const healthCheck = setInterval(() => { if (navigator.onLine) fetchData() }, 30000)
     return () => {
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
@@ -221,36 +206,19 @@ const App: React.FC = () => {
   }
 
   const handleNavigate = (tab: string) => {
-    setActiveTab(tab)
-    setSelectedPessoa(null)
-    setSelectedProtocolo(null)
-    setSelectedTarefa(null)
+    setActiveTab(tab); setSelectedPessoa(null); setSelectedProtocolo(null); setSelectedTarefa(null)
   }
-
-  const handleNavigateToTarefa = (tarefa: Tarefa) => {
-    setActiveTab('Tarefas')
-    setSelectedTarefa(tarefa)
-  }
-
+  const handleNavigateToTarefa = (tarefa: Tarefa) => { setActiveTab('Tarefas'); setSelectedTarefa(tarefa) }
   const handleNavigateToPessoa = (pessoaId: number) => {
     const pessoa = pessoas.find(p => p.id === pessoaId)
     if (pessoa) { setActiveTab('Pessoas / Dossiês'); setSelectedPessoa(pessoa); setSelectedProtocolo(null); setSelectedTarefa(null) }
   }
-
   const handleNavigateToProtocolo = (protocoloId: number) => {
     const protocolo = protocolos.find(p => p.id === protocoloId)
     if (protocolo) { setActiveTab('Protocolos'); setSelectedProtocolo(protocolo); setSelectedPessoa(null); setSelectedTarefa(null) }
   }
-
-  const handleNewTarefaFromPessoa = (pessoaId: number) => {
-    setNewTarefaInit({ pessoa_id: pessoaId })
-    setActiveTab('Tarefas')
-  }
-
-  const handleNewTarefaFromProtocolo = (protocoloId: number, pessoaId: number) => {
-    setNewTarefaInit({ protocolo_id: protocoloId, pessoa_id: pessoaId })
-    setActiveTab('Tarefas')
-  }
+  const handleNewTarefaFromPessoa = (pessoaId: number) => { setNewTarefaInit({ pessoa_id: pessoaId }); setActiveTab('Tarefas') }
+  const handleNewTarefaFromProtocolo = (protocoloId: number, pessoaId: number) => { setNewTarefaInit({ protocolo_id: protocoloId, pessoa_id: pessoaId }); setActiveTab('Tarefas') }
 
   const handleSavePessoa = async (pessoa: Pessoa) => {
     const now = new Date().toISOString()
@@ -267,26 +235,57 @@ const App: React.FC = () => {
     setSelectedPessoa(null)
   }
 
-  const handleImportDoc = async (pessoaId: number) => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.onchange = async () => {
-      const file = input.files?.[0]
-      if (!file) return
-      const now = new Date()
-      const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-      await supabase.from('documentos_recebidos').insert({
-        pessoa_id: pessoaId, protocolo_id: null, nome: file.name, tipo: file.type,
-        caminho: '', descricao: '', data_recebimento: dataRec, criado_em: new Date().toISOString()
-      })
+  // Upload real para Supabase Storage
+  const handleImportDoc = async (pessoaId: number, file: File) => {
+    const now = new Date()
+    const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+    const filePath = `pessoas/${pessoaId}/${Date.now()}_${file.name}`
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(filePath, file, { upsert: false })
+
+    if (uploadError) {
+      alert('Erro ao enviar arquivo: ' + uploadError.message)
+      return
     }
-    input.click()
+
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
+    // Como o bucket é privado, usamos signed URL
+    const { data: signedData } = await supabase.storage.from(BUCKET).createSignedUrl(filePath, 60 * 60 * 24 * 365)
+
+    await supabase.from('documentos_recebidos').insert({
+      pessoa_id: pessoaId,
+      protocolo_id: null,
+      nome: file.name,
+      tipo: file.type,
+      caminho: signedData?.signedUrl || urlData?.publicUrl || filePath,
+      descricao: '',
+      data_recebimento: dataRec,
+      criado_em: new Date().toISOString(),
+    })
   }
 
   const handleOpenFile = async (filePath: string) => {
     if (!filePath || filePath === '') return
     if (filePath.startsWith('http')) window.open(filePath, '_blank')
-    // Arquivos locais são silenciosamente ignorados
+  }
+
+  // Delete arquivo do Storage + registro do banco
+  const handleDeleteDocumento = async (id: number, caminho?: string) => {
+    if (!window.confirm('Remover o registro deste documento?')) return
+    // Se for arquivo na nuvem, extrai o path e deleta do Storage
+    if (caminho?.startsWith('http')) {
+      try {
+        const url = new URL(caminho)
+        const pathParts = url.pathname.split(`/${BUCKET}/`)
+        if (pathParts.length > 1) {
+          const storagePath = decodeURIComponent(pathParts[1].split('?')[0])
+          await supabase.storage.from(BUCKET).remove([storagePath])
+        }
+      } catch { /* ignora erros de parse de URL */ }
+    }
+    await supabase.from('documentos_recebidos').delete().eq('id', id)
   }
 
   const handleNewDocGerado = (pessoa: Pessoa) => {
@@ -329,11 +328,6 @@ const App: React.FC = () => {
     await supabase.from('protocolos').update({ historico, atualizado_em: new Date().toISOString() }).eq('id', id)
     if (selectedProtocolo?.id === id)
       setSelectedProtocolo(prev => prev ? { ...prev, historico: JSON.stringify(historico) } : null)
-  }
-
-  const handleDeleteDocumento = async (id: number) => {
-    if (!window.confirm('Remover o registro deste documento?')) return
-    await supabase.from('documentos_recebidos').delete().eq('id', id)
   }
 
   const handleSaveDocumentoGerado = async (documento: DocumentoGerado) => {
@@ -422,14 +416,11 @@ const App: React.FC = () => {
     )
   }
 
-  if (!session) {
-    return <Login />
-  }
+  if (!session) return <Login />
 
   return (
     <div className="flex h-screen w-full overflow-hidden font-sans">
       <Sidebar activeTab={activeTab} onTabChange={handleNavigate} onLogout={handleLogout} />
-
       <main className="flex-1 flex flex-col bg-main-bg overflow-hidden">
         <Topbar
           activeTab={activeTab}
@@ -438,127 +429,39 @@ const App: React.FC = () => {
           isOnline={isOnline}
           userEmail={session.user.email}
         />
-
         <div className="flex-1 overflow-hidden">
           {activeTab === 'Dashboard' && (
-            <Dashboard
-              protocolos={protocolos}
-              tarefas={tarefas}
-              agenda={agenda}
-              onSelectProtocolo={setSelectedProtocolo}
-              onNavigate={handleNavigate}
-              onNavigateToTarefa={handleNavigateToTarefa}
-              formatDate={formatDate}
-              getPrazoStatus={getPrazoStatus}
-            />
+            <Dashboard protocolos={protocolos} tarefas={tarefas} agenda={agenda} onSelectProtocolo={setSelectedProtocolo} onNavigate={handleNavigate} onNavigateToTarefa={handleNavigateToTarefa} formatDate={formatDate} getPrazoStatus={getPrazoStatus} />
           )}
           {activeTab === 'Pessoas / Dossiês' && (
             <Pessoas
-              pessoas={pessoas}
-              protocolos={protocolos}
-              documentos={documentos}
-              documentosGerados={documentosGerados}
-              tarefas={tarefas}
-              selectedPessoa={selectedPessoa}
-              onSelectPessoa={setSelectedPessoa}
-              onSavePessoa={handleSavePessoa}
-              onDeletePessoa={handleDeletePessoa}
-              onImportDoc={handleImportDoc}
-              onOpenFile={handleOpenFile}
-              onDeleteDoc={handleDeleteDocumento}
-              onDeleteDocGerado={handleDeleteDocumentoGerado}
-              onNewDocGerado={handleNewDocGerado}
-              onEditDocGerado={handleEditDocGerado}
-              onNewTarefa={handleNewTarefaFromPessoa}
-              formatDate={formatDate}
+              pessoas={pessoas} protocolos={protocolos} documentos={documentos} documentosGerados={documentosGerados} tarefas={tarefas}
+              selectedPessoa={selectedPessoa} onSelectPessoa={setSelectedPessoa} onSavePessoa={handleSavePessoa} onDeletePessoa={handleDeletePessoa}
+              onImportDoc={handleImportDoc} onOpenFile={handleOpenFile} onDeleteDoc={handleDeleteDocumento}
+              onDeleteDocGerado={handleDeleteDocumentoGerado} onNewDocGerado={handleNewDocGerado} onEditDocGerado={handleEditDocGerado}
+              onNewTarefa={handleNewTarefaFromPessoa} formatDate={formatDate}
             />
           )}
           {activeTab === 'Protocolos' && (
-            <Protocolos
-              protocolos={protocolos}
-              pessoas={pessoas}
-              tarefas={tarefas}
-              selectedProtocolo={selectedProtocolo}
-              onSelectProtocolo={setSelectedProtocolo}
-              onSaveProtocolo={handleSaveProtocolo}
-              onDeleteProtocolo={handleDeleteProtocolo}
-              onUpdateStatus={handleUpdateProtocoloStatus}
-              onAddMovimentacao={handleAddMovimentacao}
-              onNewTarefa={handleNewTarefaFromProtocolo}
-              formatDate={formatDate}
-              getPrazoStatus={getPrazoStatus}
-            />
+            <Protocolos protocolos={protocolos} pessoas={pessoas} tarefas={tarefas} selectedProtocolo={selectedProtocolo} onSelectProtocolo={setSelectedProtocolo} onSaveProtocolo={handleSaveProtocolo} onDeleteProtocolo={handleDeleteProtocolo} onUpdateStatus={handleUpdateProtocoloStatus} onAddMovimentacao={handleAddMovimentacao} onNewTarefa={handleNewTarefaFromProtocolo} formatDate={formatDate} getPrazoStatus={getPrazoStatus} />
           )}
           {activeTab === 'Documentos Recebidos' && (
-            <DocumentosRecebidos
-              documentos={documentos}
-              pessoas={pessoas}
-              onOpenFile={handleOpenFile}
-              onDeleteDoc={handleDeleteDocumento}
-              onSelectPessoa={setSelectedPessoa}
-              onNavigate={handleNavigate}
-              formatDate={formatDate}
-            />
+            <DocumentosRecebidos documentos={documentos} pessoas={pessoas} onOpenFile={handleOpenFile} onDeleteDoc={(id) => handleDeleteDocumento(id)} onSelectPessoa={setSelectedPessoa} onNavigate={handleNavigate} formatDate={formatDate} />
           )}
           {activeTab === 'Documentos Gerados' && (
-            <DocumentosGerados
-              documentosGerados={documentosGerados}
-              pessoas={pessoas}
-              onOpenFile={handleOpenFile}
-              onDeleteDocGerado={handleDeleteDocumentoGerado}
-              onSelectPessoa={setSelectedPessoa}
-              onNavigate={handleNavigate}
-              formatDate={formatDate}
-            />
+            <DocumentosGerados documentosGerados={documentosGerados} pessoas={pessoas} onOpenFile={handleOpenFile} onDeleteDocGerado={handleDeleteDocumentoGerado} onSelectPessoa={setSelectedPessoa} onNavigate={handleNavigate} formatDate={formatDate} />
           )}
           {activeTab === 'Tarefas' && (
-            <Tarefas
-              tarefas={tarefas}
-              pessoas={pessoas}
-              protocolos={protocolos}
-              selectedTarefa={selectedTarefa}
-              onSelectTarefa={setSelectedTarefa}
-              onSaveTarefa={handleSaveTarefa}
-              onToggleStatus={handleToggleTarefaStatus}
-              onDeleteTarefa={handleDeleteTarefa}
-              onNavigateToPessoa={handleNavigateToPessoa}
-              onNavigateToProtocolo={handleNavigateToProtocolo}
-              newTarefaInit={newTarefaInit}
-              onClearNewTarefaInit={() => setNewTarefaInit(null)}
-              formatDate={formatDate}
-              getPrazoStatus={getPrazoStatus}
-            />
+            <Tarefas tarefas={tarefas} pessoas={pessoas} protocolos={protocolos} selectedTarefa={selectedTarefa} onSelectTarefa={setSelectedTarefa} onSaveTarefa={handleSaveTarefa} onToggleStatus={handleToggleTarefaStatus} onDeleteTarefa={handleDeleteTarefa} onNavigateToPessoa={handleNavigateToPessoa} onNavigateToProtocolo={handleNavigateToProtocolo} newTarefaInit={newTarefaInit} onClearNewTarefaInit={() => setNewTarefaInit(null)} formatDate={formatDate} getPrazoStatus={getPrazoStatus} />
           )}
           {activeTab === 'Agenda' && (
-            <Agenda
-              agenda={agenda}
-              pessoas={pessoas}
-              protocolos={protocolos}
-              onSaveAgenda={handleSaveAgenda}
-              onToggleRealizado={handleToggleAgendaRealizado}
-              onDeleteAgenda={handleDeleteAgenda}
-              formatDate={formatDate}
-            />
+            <Agenda agenda={agenda} pessoas={pessoas} protocolos={protocolos} onSaveAgenda={handleSaveAgenda} onToggleRealizado={handleToggleAgendaRealizado} onDeleteAgenda={handleDeleteAgenda} formatDate={formatDate} />
           )}
           {activeTab === 'Busca Global' && (
-            <BuscaGlobal
-              pessoas={pessoas}
-              protocolos={protocolos}
-              documentos={documentos}
-              documentosGerados={documentosGerados}
-              tarefas={tarefas}
-              agenda={agenda}
-              onSelectPessoa={setSelectedPessoa}
-              onSelectProtocolo={setSelectedProtocolo}
-              onNavigate={handleNavigate}
-              formatDate={formatDate}
-            />
+            <BuscaGlobal pessoas={pessoas} protocolos={protocolos} documentos={documentos} documentosGerados={documentosGerados} tarefas={tarefas} agenda={agenda} onSelectPessoa={setSelectedPessoa} onSelectProtocolo={setSelectedProtocolo} onNavigate={handleNavigate} formatDate={formatDate} />
           )}
           {activeTab === 'Configurações' && (
-            <Configuracoes
-              config={config}
-              onSaveConfig={handleSaveConfig}
-            />
+            <Configuracoes config={config} onSaveConfig={handleSaveConfig} />
           )}
         </div>
       </main>
@@ -570,43 +473,22 @@ const App: React.FC = () => {
               <h2 className="text-lg font-bold">{docGeradoFormData.id ? 'Editar Documento' : 'Novo Documento'}</h2>
               <button onClick={() => setDocGeradoFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button>
             </div>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault()
-                await handleSaveDocumentoGerado(docGeradoFormData)
-                setDocGeradoFormOpen(false)
-              }}
-              className="p-6 overflow-y-auto space-y-4"
-            >
+            <form onSubmit={async (e) => { e.preventDefault(); await handleSaveDocumentoGerado(docGeradoFormData); setDocGeradoFormOpen(false) }} className="p-6 overflow-y-auto space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Tipo</label>
-                  <select
-                    className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm outline-none focus:ring-2 focus:ring-primary-btn/20"
-                    value={docGeradoFormData.tipo}
-                    onChange={e => setDocGeradoFormData({ ...docGeradoFormData, tipo: e.target.value })}
-                  >
+                  <select className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm outline-none focus:ring-2 focus:ring-primary-btn/20" value={docGeradoFormData.tipo} onChange={e => setDocGeradoFormData({ ...docGeradoFormData, tipo: e.target.value })}>
                     <option>Ofício</option><option>Memorando</option><option>Despacho</option><option>Parecer</option><option>Relatório</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Título *</label>
-                  <input
-                    required
-                    className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm outline-none focus:ring-2 focus:ring-primary-btn/20"
-                    value={docGeradoFormData.titulo}
-                    onChange={e => setDocGeradoFormData({ ...docGeradoFormData, titulo: e.target.value })}
-                  />
+                  <input required className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm outline-none focus:ring-2 focus:ring-primary-btn/20" value={docGeradoFormData.titulo} onChange={e => setDocGeradoFormData({ ...docGeradoFormData, titulo: e.target.value })} />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Conteúdo</label>
-                <textarea
-                  rows={8}
-                  className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm outline-none focus:ring-2 focus:ring-primary-btn/20 resize-none"
-                  value={docGeradoFormData.conteudo}
-                  onChange={e => setDocGeradoFormData({ ...docGeradoFormData, conteudo: e.target.value })}
-                />
+                <textarea rows={8} className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm outline-none focus:ring-2 focus:ring-primary-btn/20 resize-none" value={docGeradoFormData.conteudo} onChange={e => setDocGeradoFormData({ ...docGeradoFormData, conteudo: e.target.value })} />
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setDocGeradoFormOpen(false)} className="px-4 py-2 text-text-secondary font-bold hover:text-text-main text-sm">Cancelar</button>
