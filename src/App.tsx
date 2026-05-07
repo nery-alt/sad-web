@@ -237,34 +237,32 @@ const App: React.FC = () => {
 
   // Upload real para Supabase Storage
   const handleImportDoc = async (pessoaId: number, file: File) => {
-    const now = new Date()
-    const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-    const filePath = `pessoas/${pessoaId}/${Date.now()}_${file.name}`
+  const now = new Date()
+  const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+  const filePath = `pessoas/${pessoaId}/${Date.now()}_${file.name}`
 
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(filePath, file, { upsert: false })
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(filePath, file, { upsert: false })
 
-    if (uploadError) {
-      alert('Erro ao enviar arquivo: ' + uploadError.message)
-      return
-    }
-
-    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
-    // Como o bucket é privado, usamos signed URL
-    const { data: signedData } = await supabase.storage.from(BUCKET).createSignedUrl(filePath, 60 * 60 * 24 * 365)
-
-    await supabase.from('documentos_recebidos').insert({
-      pessoa_id: pessoaId,
-      protocolo_id: null,
-      nome: file.name,
-      tipo: file.type,
-      caminho: signedData?.signedUrl || urlData?.publicUrl || filePath,
-      descricao: '',
-      data_recebimento: dataRec,
-      criado_em: new Date().toISOString(),
-    })
+  if (uploadError) {
+    alert('Erro ao enviar arquivo: ' + uploadError.message)
+    return
   }
+
+  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
+
+  await supabase.from('documentos_recebidos').insert({
+    pessoa_id: pessoaId,
+    protocolo_id: null,
+    nome: file.name,
+    tipo: file.type,
+    caminho: urlData.publicUrl,
+    descricao: '',
+    data_recebimento: dataRec,
+    criado_em: new Date().toISOString(),
+  })
+}
 
   const handleOpenFile = async (filePath: string) => {
     if (!filePath || filePath === '') return
