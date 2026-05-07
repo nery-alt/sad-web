@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import { Login } from './components/Login'
 import { Sidebar } from './components/Sidebar'
@@ -55,6 +55,9 @@ const App: React.FC = () => {
     nomeUsuario: '', nomeSetor: '', cargo: '', logomarca: '', assinaturaPadrao: '', cidade: '', uf: ''
   })
 
+  const channelRef = useRef<any>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Auth listener
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -67,37 +70,7 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Dados + Realtime
-  useEffect(() => {
-    if (!session) return
-
-    const onOnline = () => setIsOnline(true)
-    const onOffline = () => setIsOnline(false)
-    window.addEventListener('online', onOnline)
-    window.addEventListener('offline', onOffline)
-
-    fetchData()
-    fetchConfig()
-
-    // Realtime — qualquer mudança em qualquer tabela dispara fetchData
-    const channel = supabase
-      .channel('sad-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pessoas' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'protocolos' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos_recebidos' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos_gerados' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tarefas' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'agenda' }, () => fetchData())
-      .subscribe()
-
-    return () => {
-      window.removeEventListener('online', onOnline)
-      window.removeEventListener('offline', onOffline)
-      supabase.removeChannel(channel)
-    }
-  }, [session])
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     const { data: p } = await supabase.from('pessoas').select('*').order('nome')
     if (p) setPessoas(p)
 
@@ -145,18 +118,81 @@ const App: React.FC = () => {
     if (ag) setAgenda(ag.map((r: any) => ({
       ...r, pessoa_nome: r.pessoa?.nome, protocolo_numero: r.protocolo?.numero
     })))
-  }
+  }, [])
 
-  const fetchConfig = async () => {
+  const fetchConfig = useCallback(async () => {
     const { data } = await supabase.from('configuracoes').select('*')
     if (data) {
-      const newConfig = { ...config }
+      const newConfig: Config = {
+        nomeUsuario: '', nomeSetor: '', cargo: '', logomarca: '', assinaturaPadrao: '', cidade: '', uf: ''
+      }
       data.forEach((item: any) => {
         if (item.chave in newConfig) (newConfig as any)[item.chave] = item.valor
       })
       setConfig(newConfig)
     }
-  }
+  }, [])
+
+  const setupRealtime = useCallback(() => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+
+    const channel = supabase
+      .channel(`sad-realtime-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pessoas' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'protocolos' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos_recebidos' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos_gerados' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tarefas' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agenda' }, () => fetchData())
+      .subscribe((status) => {
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          // Reconecta automaticamente após 5 segundos
+          if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+          reconnectTimerRef.current = setTimeout(() => {
+            setupRealtime()
+            fetchData()
+          }, 5000)
+        }
+      })
+
+    channelRef.current = channel
+  }, [fetchData])
+
+  // Dados + Realtime
+  useEffect(() => {
+    if (!session) return
+
+    const onOnline = () => {
+      setIsOnline(true)
+      // Quando voltar a internet, recarrega dados e reconecta Realtime
+      fetchData()
+      setupRealtime()
+    }
+    const onOffline = () => setIsOnline(false)
+
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+
+    fetchData()
+    fetchConfig()
+    setupRealtime()
+
+    // Detector de tela branca — verifica a cada 30s se os dados estão vazios e recarrega
+    const healthCheck = setInterval(() => {
+      if (navigator.onLine) fetchData()
+    }, 30000)
+
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+      clearInterval(healthCheck)
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      if (channelRef.current) supabase.removeChannel(channelRef.current)
+    }
+  }, [session, fetchData, fetchConfig, setupRealtime])
 
   const parseLocalDate = (dateStr: string) => {
     if (!dateStr) return new Date(NaN)
@@ -248,8 +284,9 @@ const App: React.FC = () => {
   }
 
   const handleOpenFile = async (filePath: string) => {
+    if (!filePath || filePath === '') return
     if (filePath.startsWith('http')) window.open(filePath, '_blank')
-    else alert('Arquivo local não pode ser aberto na versão web: ' + filePath)
+    // Arquivos locais são silenciosamente ignorados
   }
 
   const handleNewDocGerado = (pessoa: Pessoa) => {
