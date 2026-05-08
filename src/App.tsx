@@ -297,21 +297,30 @@ const App: React.FC = () => {
   }
 
  const handleSaveProtocolo = async (protocolo: Protocolo) => {
-    const now = new Date().toISOString()
-    const { pessoa_nome, pessoa_endereco, pessoa_telefone, pessoa_cpf,
-            criado_em, atualizado_em, id, ...data } = protocolo
-    const historico = typeof data.historico === 'string'
-      ? JSON.parse(data.historico || '[]')
-      : data.historico
-    if (protocolo.id) {
-      await supabase.from('protocolos')
-        .update({ ...data, historico, atualizado_em: now })
-        .eq('id', protocolo.id)
-    } else {
-      await supabase.from('protocolos')
-        .insert({ ...data, historico: [], criado_em: now, atualizado_em: now })
-    }
+  const now = new Date().toISOString()
+  const { pessoa_nome, pessoa_endereco, pessoa_telefone, pessoa_cpf,
+          criado_em, atualizado_em, id, ...data } = protocolo
+  const historico = typeof data.historico === 'string'
+    ? JSON.parse(data.historico || '[]')
+    : data.historico
+
+  // Converte strings vazias em null para campos date
+  const payload = {
+    ...data,
+    historico,
+    data_entrada: data.data_entrada || null,
+    prazo: data.prazo || null,
   }
+
+  if (protocolo.id) {
+    await supabase.from('protocolos')
+      .update({ ...payload, atualizado_em: now })
+      .eq('id', protocolo.id)
+  } else {
+    await supabase.from('protocolos')
+      .insert({ ...payload, criado_em: now, atualizado_em: now })
+  }
+}
 
   const handleDeleteProtocolo = async (id: number) => {
     if (!window.confirm('Excluir este protocolo e seus vinculados?')) return
