@@ -236,10 +236,17 @@ const App: React.FC = () => {
   }
 
   // Upload real para Supabase Storage
-  const handleImportDoc = async (pessoaId: number, file: File) => {
+const handleImportDoc = async (pessoaId: number, file: File) => {
   const now = new Date()
   const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-  const filePath = `pessoas/${pessoaId}/${Date.now()}_${file.name}`
+  
+  // Sanitiza o nome: remove acentos e substitui espaços por underscore
+  const safeName = file.name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '_')
+  
+  const filePath = `pessoas/${pessoaId}/${Date.now()}_${safeName}`
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
