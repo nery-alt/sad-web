@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react'
-import { ExternalLink, Trash2, Search } from 'lucide-react'
+import React, { useState, useMemo, useRef } from 'react'
+import { ExternalLink, Trash2, Search, Upload } from 'lucide-react'
 import type { DocumentoRecebido, Pessoa } from '../types'
 
 interface DocumentosRecebidosProps {
@@ -9,6 +9,7 @@ interface DocumentosRecebidosProps {
   onDeleteDoc: (id: number) => void
   onSelectPessoa: (pessoa: Pessoa) => void
   onNavigate: (tab: string) => void
+  onImportDoc: (file: File) => void
   formatDate: (dateStr: string) => string
 }
 
@@ -16,9 +17,11 @@ export const DocumentosRecebidos: React.FC<DocumentosRecebidosProps> = ({
   documentos,
   onOpenFile,
   onDeleteDoc,
+  onImportDoc,
   formatDate,
 }) => {
   const [searchDoc, setSearchDoc] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const filteredDocs = useMemo(() => documentos.filter(d =>
     (d.nome || '').toLowerCase().includes(searchDoc.toLowerCase()) ||
@@ -41,6 +44,18 @@ export const DocumentosRecebidos: React.FC<DocumentosRecebidosProps> = ({
           <h1 className="text-2xl font-bold">Documentos Recebidos</h1>
           <p className="text-text-secondary text-sm">Todos os arquivos importados do sistema.</p>
         </div>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm"
+        >
+          <Upload size={16} /> Importar
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={e => { if (e.target.files?.[0]) { onImportDoc(e.target.files[0]); e.target.value = '' } }}
+        />
       </div>
       <div className="mb-3 relative shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
