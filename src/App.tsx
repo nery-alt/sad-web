@@ -240,12 +240,11 @@ const handleImportDoc = async (pessoaId: number, file: File) => {
   const now = new Date()
   const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
   
-  // Sanitiza o nome: remove acentos e substitui espaços por underscore
   const safeName = file.name
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, '_')
-  
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+
   const filePath = `pessoas/${pessoaId}/${Date.now()}_${safeName}`
 
   const { error: uploadError } = await supabase.storage
