@@ -267,6 +267,35 @@ const handleImportDoc = async (pessoaId: number, file: File) => {
   })
 }
 
+const handleImportDocGlobal = async (file: File) => {
+  const now = new Date()
+  const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
+  const filePath = `global/${Date.now()}.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(filePath, file, { upsert: false })
+
+  if (uploadError) {
+    alert('Erro ao enviar arquivo: ' + uploadError.message)
+    return
+  }
+
+  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
+
+  await supabase.from('documentos_recebidos').insert({
+    pessoa_id: null,
+    protocolo_id: null,
+    nome: file.name,
+    tipo: file.type,
+    caminho: urlData.publicUrl,
+    descricao: '',
+    data_recebimento: dataRec,
+    criado_em: new Date().toISOString(),
+  })
+}
+  
   const handleOpenFile = async (filePath: string) => {
     if (!filePath || filePath === '') return
     if (filePath.startsWith('http')) window.open(filePath, '_blank')
