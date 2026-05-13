@@ -241,9 +241,9 @@ const handleImportDoc = async (pessoaId: number, file: File) => {
   const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
   
   const safeName = file.name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
+  .normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^\w.-]/g, '_')
 
   const filePath = `pessoas/${pessoaId}/${Date.now()}_${safeName}`
 
