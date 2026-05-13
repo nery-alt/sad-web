@@ -490,9 +490,9 @@ const handleImportDocGlobal = async (file: File) => {
           {activeTab === 'Protocolos' && (
             <Protocolos protocolos={protocolos} pessoas={pessoas} tarefas={tarefas} selectedProtocolo={selectedProtocolo} onSelectProtocolo={setSelectedProtocolo} onSaveProtocolo={handleSaveProtocolo} onDeleteProtocolo={handleDeleteProtocolo} onUpdateStatus={handleUpdateProtocoloStatus} onAddMovimentacao={handleAddMovimentacao} onNewTarefa={handleNewTarefaFromProtocolo} formatDate={formatDate} getPrazoStatus={getPrazoStatus} />
           )}
-          {activeTab === 'Documentos Recebidos' && (
-            <DocumentosRecebidos documentos={documentos} pessoas={pessoas} onOpenFile={handleOpenFile} onDeleteDoc={(id) => handleDeleteDocumento(id)} onSelectPessoa={setSelectedPessoa} onNavigate={handleNavigate} formatDate={formatDate} />
-          )}
+         {activeTab === 'Documentos Recebidos' && (
+  <DocumentosRecebidos documentos={documentos} pessoas={pessoas} onOpenFile={handleOpenFile} onDeleteDoc={(id) => handleDeleteDocumento(id)} onSelectPessoa={setSelectedPessoa} onNavigate={handleNavigate} onImportDoc={handleImportDocGlobal} formatDate={formatDate} />
+)}
           {activeTab === 'Documentos Gerados' && (
             <DocumentosGerados documentosGerados={documentosGerados} pessoas={pessoas} onOpenFile={handleOpenFile} onDeleteDocGerado={handleDeleteDocumentoGerado} onSelectPessoa={setSelectedPessoa} onNavigate={handleNavigate} formatDate={formatDate} />
           )}
