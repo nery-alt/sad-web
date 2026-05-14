@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Plus, ArrowLeft, Edit, Trash2, User, Building2, MapPin, FileText, Inbox, FilePlus, ExternalLink, Search, CheckSquare, Upload, Loader, Printer } from 'lucide-react'
+import { Plus, ArrowLeft, Edit, Trash2, Building2, MapPin, FileText, Inbox, FilePlus, ExternalLink, Search, CheckSquare, Upload, Loader, Printer } from 'lucide-react'
 import type { Pessoa, Protocolo, DocumentoRecebido, DocumentoGerado, Tarefa } from '../types'
 
 interface PessoasProps {
