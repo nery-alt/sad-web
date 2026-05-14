@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Plus, ArrowLeft, Edit, Trash2, User, Building2, MapPin, FileText, Inbox, FilePlus, ExternalLink, Search, CheckSquare, Upload, Loader } from 'lucide-react'
+import { Plus, ArrowLeft, Edit, Trash2, User, Building2, MapPin, FileText, Inbox, FilePlus, ExternalLink, Search, CheckSquare, Upload, Loader, Printer } from 'lucide-react'
 import type { Pessoa, Protocolo, DocumentoRecebido, DocumentoGerado, Tarefa } from '../types'
 
 interface PessoasProps {
@@ -98,6 +98,63 @@ export const Pessoas: React.FC<PessoasProps> = ({
       }
     }
     input.click()
+  }
+
+  const handleImprimirRoteiro = () => {
+    const lista = filteredPessoas
+    const hoje = new Date().toLocaleDateString('pt-BR')
+    const linhas = lista.map((p, i) => {
+      const prots = protocolos.filter(pr => pr.pessoa_id === p.id)
+      return `
+        <div class="card">
+          <div class="numero">${i + 1}</div>
+          <div class="info">
+            <div class="nome">${p.nome}</div>
+            ${p.orgao ? `<div class="detalhe"><b>Órgão/Tipo:</b> ${p.orgao}</div>` : ''}
+            ${p.cpf ? `<div class="detalhe"><b>CPF:</b> ${p.cpf}</div>` : ''}
+            ${p.telefone ? `<div class="detalhe"><b>Tel:</b> ${p.telefone}</div>` : ''}
+            ${p.endereco ? `<div class="detalhe endereco"><b>Endereço:</b> ${p.endereco}</div>` : ''}
+            ${prots.length > 0 ? `<div class="detalhe"><b>Protocolos:</b> ${prots.map(pr => `${pr.numero} — ${pr.assunto}`).join(' | ')}</div>` : ''}
+            ${p.observacoes ? `<div class="detalhe obs"><b>Obs:</b> ${p.observacoes}</div>` : ''}
+          </div>
+        </div>
+      `
+    }).join('')
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Roteiro de Vistorias</title>
+        <style>
+          body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; color: #111; }
+          h2 { font-size: 16px; margin-bottom: 4px; }
+          .data { font-size: 11px; color: #555; margin-bottom: 16px; }
+          .card { display: flex; gap: 12px; border: 1px solid #ccc; border-radius: 6px; padding: 10px 14px; margin-bottom: 10px; page-break-inside: avoid; }
+          .numero { font-size: 20px; font-weight: bold; color: #aaa; min-width: 24px; padding-top: 2px; }
+          .info { flex: 1; }
+          .nome { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
+          .detalhe { margin-top: 2px; line-height: 1.5; }
+          .endereco { font-size: 13px; color: #1a56db; }
+          .obs { color: #555; font-style: italic; }
+          @media print { body { margin: 10px; } }
+        </style>
+      </head>
+      <body>
+        <h2>Roteiro de Vistorias — SEMDECP</h2>
+        <div class="data">Gerado em: ${hoje} &nbsp;|&nbsp; Total: ${lista.length} pessoa(s)</div>
+        ${linhas}
+      </body>
+      </html>
+    `
+
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => w.print(), 500)
   }
 
   const getStatusOcorrenciaBadge = (status?: string) => {
@@ -201,11 +258,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
           <div>
             <div className="flex justify-between items-center mb-2">
               <h3 className="font-bold text-sm flex items-center gap-2"><Inbox size={16} /> Documentos Recebidos ({pessoaDocumentos.length})</h3>
-              <button
-                onClick={handleImportClick}
-                disabled={uploading}
-                className="flex items-center gap-1 px-2 py-1 bg-primary-btn text-white rounded text-xs hover:opacity-90 disabled:opacity-60"
-              >
+              <button onClick={handleImportClick} disabled={uploading} className="flex items-center gap-1 px-2 py-1 bg-primary-btn text-white rounded text-xs hover:opacity-90 disabled:opacity-60">
                 {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
                 {uploading ? 'Enviando...' : 'Importar'}
               </button>
@@ -314,7 +367,10 @@ export const Pessoas: React.FC<PessoasProps> = ({
     <div className="p-6 flex flex-col h-full overflow-hidden">
       <div className="flex justify-between items-center mb-4 shrink-0">
         <div><h1 className="text-2xl font-bold">Pessoas / Dossiês</h1><p className="text-text-secondary text-sm">Gerencie seus contatos e dossiês.</p></div>
-        <button onClick={() => { setPessoaFormData({ nome: '', cpf: '', telefone: '', endereco: '', email: '', orgao: '', observacoes: '', status_ocorrencia: 'em_aberto', criado_em: '', atualizado_em: '' }); setIsPessoaFormOpen(true); }} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm"><Plus size={18} /> Nova Pessoa</button>
+        <div className="flex gap-2">
+          <button onClick={handleImprimirRoteiro} className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm"><Printer size={16} /> Imprimir Roteiro</button>
+          <button onClick={() => { setPessoaFormData({ nome: '', cpf: '', telefone: '', endereco: '', email: '', orgao: '', observacoes: '', status_ocorrencia: 'em_aberto', criado_em: '', atualizado_em: '' }); setIsPessoaFormOpen(true); }} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm"><Plus size={18} /> Nova Pessoa</button>
+        </div>
       </div>
       <div className="mb-4 relative shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
