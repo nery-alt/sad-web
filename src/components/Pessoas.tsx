@@ -22,6 +22,41 @@ interface PessoasProps {
   formatDate: (dateStr: string) => string
 }
 
+const PESSOA_VAZIA: Pessoa = {
+  nome: '', cpf: '', rg: '', data_nascimento: '', genero: '', estado_civil: '',
+  telefone: '', email: '', endereco: '', bairro: '', municipio: '', cep: '',
+  ponto_referencia: '', gps_lat: undefined, gps_lng: undefined,
+  orgao: '', num_pessoas_familia: undefined, renda_familiar: '', programa_social: '',
+  tipo_moradia: '', material_construcao: '', area_risco: undefined,
+  deficiencia: '', doenca_cronica: '', prioridade: '',
+  observacoes: '', status_ocorrencia: 'em_aberto', criado_em: '', atualizado_em: ''
+}
+
+function SecaoForm({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+        <p className="text-xs font-bold text-text-secondary uppercase">{titulo}</p>
+      </div>
+      <div className="p-4 grid grid-cols-2 gap-3">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function Campo({ label, span2, children }: { label: string; span2?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={span2 ? 'col-span-2' : ''}>
+      <label className="block text-xs font-bold text-text-secondary uppercase mb-1">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+const inputCls = "w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none"
+const selectCls = "w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none"
+
 export const Pessoas: React.FC<PessoasProps> = ({
   pessoas, protocolos, documentos, documentosGerados, tarefas,
   selectedPessoa, onSelectPessoa, onSavePessoa, onDeletePessoa,
@@ -32,34 +67,21 @@ export const Pessoas: React.FC<PessoasProps> = ({
   const [isPessoaFormOpen, setIsPessoaFormOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set())
-  const [pessoaFormData, setPessoaFormData] = useState<Pessoa>({
-    nome: '', cpf: '', telefone: '', endereco: '', email: '', orgao: '', observacoes: '', status_ocorrencia: 'em_aberto', criado_em: '', atualizado_em: ''
-  })
+  const [pessoaFormData, setPessoaFormData] = useState<Pessoa>({ ...PESSOA_VAZIA })
+
+  const f = pessoaFormData
+  const setF = (partial: Partial<Pessoa>) => setPessoaFormData(prev => ({ ...prev, ...partial }))
 
   const filteredPessoas = useMemo(() => pessoas.filter(p =>
     p.nome.toLowerCase().includes(searchPessoa.toLowerCase()) ||
-    p.orgao?.toLowerCase().includes(searchPessoa.toLowerCase())
+    p.orgao?.toLowerCase().includes(searchPessoa.toLowerCase()) ||
+    p.bairro?.toLowerCase().includes(searchPessoa.toLowerCase())
   ), [pessoas, searchPessoa])
 
-  const pessoaProtocolos = useMemo(() => {
-    if (!selectedPessoa) return []
-    return protocolos.filter(pr => pr.pessoa_id === selectedPessoa.id)
-  }, [protocolos, selectedPessoa])
-
-  const pessoaDocumentos = useMemo(() => {
-    if (!selectedPessoa) return []
-    return documentos.filter(d => d.pessoa_id === selectedPessoa.id)
-  }, [documentos, selectedPessoa])
-
-  const pessoaDocsGerados = useMemo(() => {
-    if (!selectedPessoa) return []
-    return documentosGerados.filter(dg => dg.pessoa_id === selectedPessoa.id)
-  }, [documentosGerados, selectedPessoa])
-
-  const pessoaTarefas = useMemo(() => {
-    if (!selectedPessoa) return []
-    return tarefas.filter(t => t.pessoa_id === selectedPessoa.id)
-  }, [tarefas, selectedPessoa])
+  const pessoaProtocolos = useMemo(() => !selectedPessoa ? [] : protocolos.filter(pr => pr.pessoa_id === selectedPessoa.id), [protocolos, selectedPessoa])
+  const pessoaDocumentos = useMemo(() => !selectedPessoa ? [] : documentos.filter(d => d.pessoa_id === selectedPessoa.id), [documentos, selectedPessoa])
+  const pessoaDocsGerados = useMemo(() => !selectedPessoa ? [] : documentosGerados.filter(dg => dg.pessoa_id === selectedPessoa.id), [documentosGerados, selectedPessoa])
+  const pessoaTarefas = useMemo(() => !selectedPessoa ? [] : tarefas.filter(t => t.pessoa_id === selectedPessoa.id), [tarefas, selectedPessoa])
 
   const handleSavePessoa = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -94,10 +116,10 @@ export const Pessoas: React.FC<PessoasProps> = ({
     const lista = selecionadas.size > 0
       ? filteredPessoas.filter(p => selecionadas.has(p.id!))
       : filteredPessoas
-
     const hoje = new Date().toLocaleDateString('pt-BR')
     const linhas = lista.map((p, i) => {
       const prots = protocolos.filter(pr => pr.pessoa_id === p.id)
+      const endCompleto = [p.endereco, p.bairro, p.municipio].filter(Boolean).join(', ')
       return `
         <div class="card">
           <div class="numero">${i + 1}</div>
@@ -106,16 +128,15 @@ export const Pessoas: React.FC<PessoasProps> = ({
             ${p.orgao ? `<div class="detalhe"><b>Órgão/Tipo:</b> ${p.orgao}</div>` : ''}
             ${p.cpf ? `<div class="detalhe"><b>CPF:</b> ${p.cpf}</div>` : ''}
             ${p.telefone ? `<div class="detalhe"><b>Tel:</b> ${p.telefone}</div>` : ''}
-            ${p.endereco ? `<div class="detalhe endereco"><b>Endereço:</b> ${p.endereco}</div>` : ''}
+            ${endCompleto ? `<div class="detalhe endereco"><b>Endereço:</b> ${endCompleto}</div>` : ''}
+            ${p.ponto_referencia ? `<div class="detalhe"><b>Ref:</b> ${p.ponto_referencia}</div>` : ''}
+            ${p.area_risco ? `<div class="detalhe risco">⚠️ Área de risco</div>` : ''}
             ${prots.length > 0 ? `<div class="detalhe"><b>Protocolos:</b> ${prots.map(pr => `${pr.numero} — ${pr.assunto}`).join(' | ')}</div>` : ''}
             ${p.observacoes ? `<div class="detalhe obs"><b>Obs:</b> ${p.observacoes}</div>` : ''}
           </div>
-        </div>
-      `
+        </div>`
     }).join('')
-
-    const html = `
-      <!DOCTYPE html><html><head><meta charset="UTF-8"><title>Roteiro de Vistorias</title>
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Roteiro de Vistorias</title>
       <style>
         body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; color: #111; }
         h2 { font-size: 16px; margin-bottom: 4px; }
@@ -126,14 +147,14 @@ export const Pessoas: React.FC<PessoasProps> = ({
         .nome { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
         .detalhe { margin-top: 2px; line-height: 1.5; }
         .endereco { font-size: 13px; color: #1a56db; }
+        .risco { color: #b91c1c; font-weight: bold; }
         .obs { color: #555; font-style: italic; }
         @media print { body { margin: 10px; } }
       </style></head><body>
         <h2>Roteiro de Vistorias — SEMDECP</h2>
         <div class="data">Gerado em: ${hoje} | Total: ${lista.length} pessoa(s)</div>
         ${linhas}
-      </body></html>
-    `
+      </body></html>`
     const w = window.open('', '_blank')
     if (!w) return
     w.document.write(html)
@@ -142,7 +163,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
     setTimeout(() => w.print(), 500)
   }
 
-  const getStatusOcorrenciaBadge = (status?: string) => {
+  const getStatusBadge = (status?: string) => {
     switch (status) {
       case 'concluido': return { label: 'Concluído', color: 'bg-success/10 text-success' }
       case 'em_andamento': return { label: 'Em andamento', color: 'bg-primary-btn/10 text-primary-btn' }
@@ -161,7 +182,139 @@ export const Pessoas: React.FC<PessoasProps> = ({
 
   const isCloudFile = (caminho?: string) => caminho?.startsWith('http')
 
+  const FormularioPessoa = () => (
+    <form onSubmit={handleSavePessoa} className="p-4 overflow-y-auto space-y-4">
+
+      <SecaoForm titulo="Identificação">
+        <Campo label="Nome *" span2>
+          <input required className={inputCls} value={f.nome} onChange={e => setF({ nome: e.target.value })} />
+        </Campo>
+        <Campo label="CPF">
+          <input className={inputCls} value={f.cpf} onChange={e => setF({ cpf: e.target.value })} placeholder="000.000.000-00" />
+        </Campo>
+        <Campo label="RG">
+          <input className={inputCls} value={f.rg || ''} onChange={e => setF({ rg: e.target.value })} />
+        </Campo>
+        <Campo label="Data de Nascimento">
+          <input className={inputCls} value={f.data_nascimento || ''} onChange={e => setF({ data_nascimento: e.target.value })} placeholder="DD/MM/AAAA" />
+        </Campo>
+        <Campo label="Gênero">
+          <select className={selectCls} value={f.genero || ''} onChange={e => setF({ genero: e.target.value })}>
+            <option value="">—</option>
+            <option>Masculino</option><option>Feminino</option><option>Outro</option><option>Prefiro não informar</option>
+          </select>
+        </Campo>
+        <Campo label="Estado Civil">
+          <select className={selectCls} value={f.estado_civil || ''} onChange={e => setF({ estado_civil: e.target.value })}>
+            <option value="">—</option>
+            <option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option>
+          </select>
+        </Campo>
+        <Campo label="Telefone">
+          <input className={inputCls} value={f.telefone} onChange={e => setF({ telefone: e.target.value })} placeholder="(00) 00000-0000" />
+        </Campo>
+        <Campo label="E-mail">
+          <input type="email" className={inputCls} value={f.email} onChange={e => setF({ email: e.target.value })} />
+        </Campo>
+        <Campo label="Órgão / Empresa / Tipo de Ocorrência" span2>
+          <input className={inputCls} value={f.orgao} onChange={e => setF({ orgao: e.target.value })} />
+        </Campo>
+      </SecaoForm>
+
+      <SecaoForm titulo="Endereço">
+        <Campo label="Endereço" span2>
+          <input className={inputCls} value={f.endereco} onChange={e => setF({ endereco: e.target.value })} placeholder="Rua, número, complemento" />
+        </Campo>
+        <Campo label="Bairro / Comunidade">
+          <input className={inputCls} value={f.bairro || ''} onChange={e => setF({ bairro: e.target.value })} />
+        </Campo>
+        <Campo label="Município / UF">
+          <input className={inputCls} value={f.municipio || ''} onChange={e => setF({ municipio: e.target.value })} placeholder="Tefé/AM" />
+        </Campo>
+        <Campo label="CEP">
+          <input className={inputCls} value={f.cep || ''} onChange={e => setF({ cep: e.target.value })} placeholder="00000-000" />
+        </Campo>
+        <Campo label="Ponto de Referência">
+          <input className={inputCls} value={f.ponto_referencia || ''} onChange={e => setF({ ponto_referencia: e.target.value })} placeholder="Próximo a..." />
+        </Campo>
+        <Campo label="GPS Latitude">
+          <input type="number" step="any" className={inputCls} value={f.gps_lat ?? ''} onChange={e => setF({ gps_lat: e.target.value ? parseFloat(e.target.value) : undefined })} placeholder="-3.348470" />
+        </Campo>
+        <Campo label="GPS Longitude">
+          <input type="number" step="any" className={inputCls} value={f.gps_lng ?? ''} onChange={e => setF({ gps_lng: e.target.value ? parseFloat(e.target.value) : undefined })} placeholder="-64.709700" />
+        </Campo>
+      </SecaoForm>
+
+      <SecaoForm titulo="Dados Socioeconômicos">
+        <Campo label="Nº Pessoas na Família">
+          <input type="number" min="1" className={inputCls} value={f.num_pessoas_familia ?? ''} onChange={e => setF({ num_pessoas_familia: e.target.value ? parseInt(e.target.value) : undefined })} />
+        </Campo>
+        <Campo label="Renda Familiar">
+          <select className={selectCls} value={f.renda_familiar || ''} onChange={e => setF({ renda_familiar: e.target.value })}>
+            <option value="">—</option>
+            <option>Sem renda</option><option>Até 1 salário</option><option>1 a 2 salários</option><option>2 a 3 salários</option><option>Acima de 3 salários</option>
+          </select>
+        </Campo>
+        <Campo label="Programa Social" span2>
+          <input className={inputCls} value={f.programa_social || ''} onChange={e => setF({ programa_social: e.target.value })} placeholder="Bolsa Família, BPC..." />
+        </Campo>
+      </SecaoForm>
+
+      <SecaoForm titulo="Moradia e Vulnerabilidade">
+        <Campo label="Tipo de Moradia">
+          <select className={selectCls} value={f.tipo_moradia || ''} onChange={e => setF({ tipo_moradia: e.target.value })}>
+            <option value="">—</option>
+            <option>Própria</option><option>Alugada</option><option>Cedida</option><option>Irregular</option><option>Abrigo</option>
+          </select>
+        </Campo>
+        <Campo label="Material de Construção">
+          <select className={selectCls} value={f.material_construcao || ''} onChange={e => setF({ material_construcao: e.target.value })}>
+            <option value="">—</option>
+            <option>Alvenaria</option><option>Madeira</option><option>Mista</option><option>Palha</option><option>Outro</option>
+          </select>
+        </Campo>
+        <Campo label="Área de Risco?">
+          <select className={selectCls} value={f.area_risco === true ? 'sim' : f.area_risco === false ? 'nao' : ''} onChange={e => setF({ area_risco: e.target.value === 'sim' ? true : e.target.value === 'nao' ? false : undefined })}>
+            <option value="">—</option><option value="sim">Sim</option><option value="nao">Não</option>
+          </select>
+        </Campo>
+        <Campo label="Prioridade">
+          <select className={selectCls} value={f.prioridade || ''} onChange={e => setF({ prioridade: e.target.value })}>
+            <option value="">—</option>
+            <option>Baixa</option><option>Média</option><option>Alta</option><option>Emergencial</option>
+          </select>
+        </Campo>
+        <Campo label="Deficiência">
+          <input className={inputCls} value={f.deficiencia || ''} onChange={e => setF({ deficiencia: e.target.value })} placeholder="Descreva se houver" />
+        </Campo>
+        <Campo label="Doença Crônica">
+          <input className={inputCls} value={f.doenca_cronica || ''} onChange={e => setF({ doenca_cronica: e.target.value })} placeholder="Ex: Diabetes, Hipertensão" />
+        </Campo>
+      </SecaoForm>
+
+      <SecaoForm titulo="Situação e Observações">
+        <Campo label="Status da Ocorrência" span2>
+          <select className={selectCls} value={f.status_ocorrencia || 'em_aberto'} onChange={e => setF({ status_ocorrencia: e.target.value as Pessoa['status_ocorrencia'] })}>
+            <option value="em_aberto">Em aberto</option>
+            <option value="em_andamento">Em andamento</option>
+            <option value="concluido">Concluído</option>
+            <option value="arquivado">Arquivado</option>
+          </select>
+        </Campo>
+        <Campo label="Observações" span2>
+          <textarea rows={3} className={`${inputCls} resize-none`} value={f.observacoes} onChange={e => setF({ observacoes: e.target.value })} />
+        </Campo>
+      </SecaoForm>
+
+      <div className="flex justify-end gap-3 pt-2 sticky bottom-0 bg-white pb-2">
+        <button type="button" onClick={() => setIsPessoaFormOpen(false)} className="px-4 py-2 text-text-secondary font-bold hover:text-text-main text-sm">Cancelar</button>
+        <button type="submit" className="px-6 py-2 bg-primary-btn text-white rounded font-bold hover:opacity-90 text-sm">Salvar</button>
+      </div>
+    </form>
+  )
+
   if (selectedPessoa) {
+    const endCompleto = [selectedPessoa.endereco, selectedPessoa.bairro, selectedPessoa.municipio].filter(Boolean).join(', ')
     return (
       <div className="p-6 animate-in fade-in duration-300 h-full overflow-y-auto">
         <button onClick={() => onSelectPessoa(null)} className="flex items-center gap-2 text-text-secondary hover:text-primary-btn mb-4 transition-colors text-sm">
@@ -170,22 +323,43 @@ export const Pessoas: React.FC<PessoasProps> = ({
         <div className="flex justify-between items-start mb-6">
           <div>
             <h1 className="text-2xl font-bold text-text-main">{selectedPessoa.nome}</h1>
-            {(() => { const b = getStatusOcorrenciaBadge(selectedPessoa.status_ocorrencia); return <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded mt-1 ${b.color}`}>{b.label}</span> })()}
+            {(() => { const b = getStatusBadge(selectedPessoa.status_ocorrencia); return <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded mt-1 ${b.color}`}>{b.label}</span> })()}
+            {selectedPessoa.prioridade && <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded mt-1 ml-1 ${selectedPessoa.prioridade === 'Emergencial' || selectedPessoa.prioridade === 'Alta' ? 'bg-red-100 text-red-700' : selectedPessoa.prioridade === 'Média' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>⚑ {selectedPessoa.prioridade}</span>}
             <p className="text-text-secondary text-sm flex items-center gap-2 mt-1"><Building2 size={14} /> {selectedPessoa.orgao || 'Sem órgão'}</p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => { setPessoaFormData(selectedPessoa); setIsPessoaFormOpen(true) }} className="flex items-center gap-1 px-3 py-1.5 bg-primary-btn text-white rounded-lg hover:opacity-90 text-sm"><Edit size={16} /> Editar</button>
+            <button onClick={() => { setPessoaFormData({ ...PESSOA_VAZIA, ...selectedPessoa }); setIsPessoaFormOpen(true) }} className="flex items-center gap-1 px-3 py-1.5 bg-primary-btn text-white rounded-lg hover:opacity-90 text-sm"><Edit size={16} /> Editar</button>
             <button onClick={() => onDeletePessoa(selectedPessoa.id!)} className="flex items-center gap-1 px-3 py-1.5 bg-error-expired text-white rounded-lg hover:opacity-90 text-sm"><Trash2 size={16} /> Excluir</button>
           </div>
         </div>
+
         <div className="grid grid-cols-2 gap-3 mb-6">
-          {selectedPessoa.endereco && (<div className="col-span-2 bg-primary-btn/5 border border-primary-btn/20 p-3 rounded-lg"><p className="text-xs text-primary-btn uppercase font-bold mb-1 flex items-center gap-1"><MapPin size={12} /> Endereço</p><p className="text-sm font-medium">{selectedPessoa.endereco}</p></div>)}
-          {selectedPessoa.telefone && (<div className="bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">Telefone</p><p className="text-sm">{selectedPessoa.telefone}</p></div>)}
-          {selectedPessoa.cpf && (<div className="bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">CPF</p><p className="text-sm">{selectedPessoa.cpf}</p></div>)}
-          {selectedPessoa.email && (<div className="bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">E-mail</p><p className="text-sm break-all">{selectedPessoa.email}</p></div>)}
-          {selectedPessoa.orgao && (<div className="bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">Órgão / Empresa / Tipo de Ocorrência</p><p className="text-sm">{selectedPessoa.orgao}</p></div>)}
-          {selectedPessoa.observacoes && (<div className="col-span-2 bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">Observações</p><p className="text-sm whitespace-pre-wrap">{selectedPessoa.observacoes}</p></div>)}
+          {endCompleto && (
+            <div className="col-span-2 bg-primary-btn/5 border border-primary-btn/20 p-3 rounded-lg">
+              <p className="text-xs text-primary-btn uppercase font-bold mb-1 flex items-center gap-1"><MapPin size={12} /> Endereço</p>
+              <p className="text-sm font-medium">{endCompleto}</p>
+              {selectedPessoa.ponto_referencia && <p className="text-xs text-text-secondary mt-1">Ref: {selectedPessoa.ponto_referencia}</p>}
+              {selectedPessoa.gps_lat && <p className="text-xs text-text-secondary mt-0.5">GPS: {selectedPessoa.gps_lat.toFixed(6)}, {selectedPessoa.gps_lng?.toFixed(6)}</p>}
+            </div>
+          )}
+          {selectedPessoa.telefone && <div className="bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">Telefone</p><p className="text-sm">{selectedPessoa.telefone}</p></div>}
+          {selectedPessoa.cpf && <div className="bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">CPF</p><p className="text-sm">{selectedPessoa.cpf}</p></div>}
+          {selectedPessoa.rg && <div className="bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">RG</p><p className="text-sm">{selectedPessoa.rg}</p></div>}
+          {selectedPessoa.data_nascimento && <div className="bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">Nascimento</p><p className="text-sm">{selectedPessoa.data_nascimento}</p></div>}
+          {selectedPessoa.email && <div className="col-span-2 bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">E-mail</p><p className="text-sm break-all">{selectedPessoa.email}</p></div>}
+          {selectedPessoa.renda_familiar && <div className="bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">Renda Familiar</p><p className="text-sm">{selectedPessoa.renda_familiar}</p></div>}
+          {selectedPessoa.tipo_moradia && <div className="bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">Moradia</p><p className="text-sm">{selectedPessoa.tipo_moradia}{selectedPessoa.material_construcao ? ` · ${selectedPessoa.material_construcao}` : ''}</p></div>}
+          {selectedPessoa.area_risco && <div className="col-span-2 bg-red-50 border border-red-200 p-3 rounded-lg"><p className="text-xs text-red-700 uppercase font-bold mb-1">⚠️ Área de Risco</p><p className="text-sm text-red-700">Residência em área de risco identificada</p></div>}
+          {(selectedPessoa.deficiencia || selectedPessoa.doenca_cronica) && (
+            <div className="col-span-2 bg-surface-card p-3 rounded-lg border border-gray-100">
+              <p className="text-xs text-text-secondary uppercase font-bold mb-1">Saúde</p>
+              {selectedPessoa.deficiencia && <p className="text-sm">Deficiência: {selectedPessoa.deficiencia}</p>}
+              {selectedPessoa.doenca_cronica && <p className="text-sm mt-0.5">Doença crônica: {selectedPessoa.doenca_cronica}</p>}
+            </div>
+          )}
+          {selectedPessoa.observacoes && <div className="col-span-2 bg-surface-card p-3 rounded-lg border border-gray-100"><p className="text-xs text-text-secondary uppercase font-bold mb-1">Observações</p><p className="text-sm whitespace-pre-wrap">{selectedPessoa.observacoes}</p></div>}
         </div>
+
         <div className="space-y-4">
           <div>
             <h3 className="font-bold text-sm mb-2 flex items-center gap-2"><FileText size={16} /> Protocolos ({pessoaProtocolos.length})</h3>
@@ -197,7 +371,6 @@ export const Pessoas: React.FC<PessoasProps> = ({
                       <span className="font-bold">{p.numero} — {p.assunto}</span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ml-2 ${p.status === 'concluido' ? 'bg-success/10 text-success' : p.status === 'em_andamento' ? 'bg-primary-btn/10 text-primary-btn' : 'bg-gray-100 text-gray-600'}`}>{p.status.replace('_', ' ')}</span>
                     </div>
-                    {selectedPessoa.endereco && <p className="text-text-secondary mt-0.5 flex items-center gap-1"><MapPin size={10} />{selectedPessoa.endereco}</p>}
                   </div>
                 ))}
               </div>
@@ -271,23 +444,15 @@ export const Pessoas: React.FC<PessoasProps> = ({
             )}
           </div>
         </div>
+
         {isPessoaFormOpen && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-surface-card"><h2 className="text-lg font-bold">Editar Pessoa</h2><button onClick={() => setIsPessoaFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button></div>
-              <form onSubmit={handleSavePessoa} className="p-6 overflow-y-auto space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Nome *</label><input required className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.nome} onChange={e => setPessoaFormData({...pessoaFormData, nome: e.target.value})} /></div>
-                  <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">CPF</label><input className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.cpf} onChange={e => setPessoaFormData({...pessoaFormData, cpf: e.target.value})} /></div>
-                  <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">E-mail</label><input type="email" className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.email} onChange={e => setPessoaFormData({...pessoaFormData, email: e.target.value})} /></div>
-                  <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Telefone</label><input className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.telefone} onChange={e => setPessoaFormData({...pessoaFormData, telefone: e.target.value})} /></div>
-                  <div className="col-span-2"><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Órgão / Empresa / Tipo de Ocorrência</label><input className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.orgao} onChange={e => setPessoaFormData({...pessoaFormData, orgao: e.target.value})} /></div>
-                  <div className="col-span-2"><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Endereço</label><input className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.endereco} onChange={e => setPessoaFormData({...pessoaFormData, endereco: e.target.value})} /></div>
-                  <div className="col-span-2"><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Status da Ocorrência</label><select className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.status_ocorrencia || 'em_aberto'} onChange={e => setPessoaFormData({...pessoaFormData, status_ocorrencia: e.target.value as Pessoa['status_ocorrencia']})}><option value="em_aberto">Em aberto</option><option value="em_andamento">Em andamento</option><option value="concluido">Concluído</option><option value="arquivado">Arquivado</option></select></div>
-                  <div className="col-span-2"><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Observações</label><textarea rows={2} className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none resize-none" value={pessoaFormData.observacoes} onChange={e => setPessoaFormData({...pessoaFormData, observacoes: e.target.value})} /></div>
-                </div>
-                <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={() => setIsPessoaFormOpen(false)} className="px-4 py-2 text-text-secondary font-bold hover:text-text-main text-sm">Cancelar</button><button type="submit" className="px-6 py-2 bg-primary-btn text-white rounded font-bold hover:opacity-90 text-sm">Salvar</button></div>
-              </form>
+              <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-surface-card">
+                <h2 className="text-lg font-bold">Editar Pessoa</h2>
+                <button onClick={() => setIsPessoaFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button>
+              </div>
+              <FormularioPessoa />
             </div>
           </div>
         )}
@@ -298,7 +463,10 @@ export const Pessoas: React.FC<PessoasProps> = ({
   return (
     <div className="p-6 flex flex-col h-full overflow-hidden">
       <div className="flex justify-between items-center mb-4 shrink-0">
-        <div><h1 className="text-2xl font-bold">Pessoas / Dossiês</h1><p className="text-text-secondary text-sm">Gerencie seus contatos e dossiês.</p></div>
+        <div>
+          <h1 className="text-2xl font-bold">Pessoas / Dossiês</h1>
+          <p className="text-text-secondary text-sm">Gerencie seus contatos e dossiês.</p>
+        </div>
         <div className="flex items-center gap-2">
           {selecionadas.size > 0 && (
             <span className="text-xs font-bold text-primary-btn bg-primary-btn/10 px-2 py-1 rounded">
@@ -308,12 +476,17 @@ export const Pessoas: React.FC<PessoasProps> = ({
           <button onClick={handleImprimirRoteiro} className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm">
             <Printer size={16} /> {selecionadas.size > 0 ? `Imprimir (${selecionadas.size})` : 'Imprimir Roteiro'}
           </button>
-          <button onClick={() => { setPessoaFormData({ nome: '', cpf: '', telefone: '', endereco: '', email: '', orgao: '', observacoes: '', status_ocorrencia: 'em_aberto', criado_em: '', atualizado_em: '' }); setIsPessoaFormOpen(true) }} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm"><Plus size={18} /> Nova Pessoa</button>
+          <button
+            onClick={() => { setPessoaFormData({ ...PESSOA_VAZIA }); setIsPessoaFormOpen(true) }}
+            className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm"
+          >
+            <Plus size={18} /> Nova Pessoa
+          </button>
         </div>
       </div>
       <div className="mb-4 relative shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-        <input type="text" placeholder="Buscar..." className="w-full pl-10 pr-4 py-2 bg-surface-card border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-btn/20 text-sm" value={searchPessoa} onChange={(e) => setSearchPessoa(e.target.value)} />
+        <input type="text" placeholder="Buscar por nome, órgão ou bairro..." className="w-full pl-10 pr-4 py-2 bg-surface-card border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-btn/20 text-sm" value={searchPessoa} onChange={e => setSearchPessoa(e.target.value)} />
       </div>
       <div className="flex-1 overflow-y-auto">
         <div className="space-y-1">
@@ -321,19 +494,15 @@ export const Pessoas: React.FC<PessoasProps> = ({
             const marcada = selecionadas.has(p.id!)
             return (
               <div key={p.id} className={`bg-white py-1 px-3 rounded-lg border transition-all flex items-center gap-3 group ${marcada ? 'border-primary-btn/50 bg-primary-btn/5' : 'border-gray-100 hover:border-primary-btn/30'}`}>
-                <input
-                  type="checkbox"
-                  checked={marcada}
-                  onChange={() => {}}
-                  onClick={e => toggleSelecionada(p.id!, e)}
-                  className="w-4 h-4 accent-primary-btn shrink-0 cursor-pointer"
-                />
+                <input type="checkbox" checked={marcada} onChange={() => {}} onClick={e => toggleSelecionada(p.id!, e)} className="w-4 h-4 accent-primary-btn shrink-0 cursor-pointer" />
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onSelectPessoa(p)}>
                   <div className="flex items-center gap-2">
                     <p className="font-bold text-sm text-text-main">{p.nome}</p>
-                    {(() => { const b = getStatusOcorrenciaBadge(p.status_ocorrencia); return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${b.color}`}>{b.label}</span> })()}
+                    {(() => { const b = getStatusBadge(p.status_ocorrencia); return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${b.color}`}>{b.label}</span> })()}
+                    {p.area_risco && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700 shrink-0">⚠️ Risco</span>}
+                    {p.prioridade && p.prioridade !== 'Baixa' && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${p.prioridade === 'Emergencial' || p.prioridade === 'Alta' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>⚑ {p.prioridade}</span>}
                   </div>
-                  <p className="text-xs text-text-secondary truncate">{p.orgao || '—'} • {p.email || '—'}</p>
+                  <p className="text-xs text-text-secondary truncate">{p.orgao || '—'} • {[p.bairro, p.municipio].filter(Boolean).join(', ') || p.endereco || '—'}</p>
                 </div>
                 <button onClick={() => onSelectPessoa(p)} className="px-3 py-1 bg-primary-btn text-white rounded text-xs hover:opacity-90 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">Ver Dossiê</button>
               </div>
@@ -345,20 +514,11 @@ export const Pessoas: React.FC<PessoasProps> = ({
       {isPessoaFormOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-surface-card"><h2 className="text-lg font-bold">Nova Pessoa</h2><button onClick={() => setIsPessoaFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button></div>
-            <form onSubmit={handleSavePessoa} className="p-6 overflow-y-auto space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Nome *</label><input required className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.nome} onChange={e => setPessoaFormData({...pessoaFormData, nome: e.target.value})} /></div>
-                <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">CPF</label><input className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.cpf} onChange={e => setPessoaFormData({...pessoaFormData, cpf: e.target.value})} /></div>
-                <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">E-mail</label><input type="email" className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.email} onChange={e => setPessoaFormData({...pessoaFormData, email: e.target.value})} /></div>
-                <div><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Telefone</label><input className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.telefone} onChange={e => setPessoaFormData({...pessoaFormData, telefone: e.target.value})} /></div>
-                <div className="col-span-2"><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Órgão / Empresa / Tipo de Ocorrência</label><input className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.orgao} onChange={e => setPessoaFormData({...pessoaFormData, orgao: e.target.value})} /></div>
-                <div className="col-span-2"><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Endereço</label><input className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.endereco} onChange={e => setPessoaFormData({...pessoaFormData, endereco: e.target.value})} /></div>
-                <div className="col-span-2"><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Status da Ocorrência</label><select className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={pessoaFormData.status_ocorrencia || 'em_aberto'} onChange={e => setPessoaFormData({...pessoaFormData, status_ocorrencia: e.target.value as Pessoa['status_ocorrencia']})}><option value="em_aberto">Em aberto</option><option value="em_andamento">Em andamento</option><option value="concluido">Concluído</option><option value="arquivado">Arquivado</option></select></div>
-                <div className="col-span-2"><label className="block text-xs font-bold text-text-secondary uppercase mb-1">Observações</label><textarea rows={2} className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none resize-none" value={pessoaFormData.observacoes} onChange={e => setPessoaFormData({...pessoaFormData, observacoes: e.target.value})} /></div>
-              </div>
-              <div className="flex justify-end gap-3 pt-2"><button type="button" onClick={() => setIsPessoaFormOpen(false)} className="px-4 py-2 text-text-secondary font-bold hover:text-text-main text-sm">Cancelar</button><button type="submit" className="px-6 py-2 bg-primary-btn text-white rounded font-bold hover:opacity-90 text-sm">Salvar</button></div>
-            </form>
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-surface-card">
+              <h2 className="text-lg font-bold">Nova Pessoa</h2>
+              <button onClick={() => setIsPessoaFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button>
+            </div>
+            <FormularioPessoa />
           </div>
         </div>
       )}
