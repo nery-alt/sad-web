@@ -476,7 +476,7 @@ const handleImportDocGlobal = async (file: File) => {
         />
         <div className="flex-1 overflow-hidden">
           {activeTab === 'Dashboard' && (
-            <Dashboard protocolos={protocolos} tarefas={tarefas} agenda={agenda} onSelectProtocolo={setSelectedProtocolo} onNavigate={handleNavigate} onNavigateToTarefa={handleNavigateToTarefa} formatDate={formatDate} getPrazoStatus={getPrazoStatus} />
+            <Dashboard protocolos={protocolos} tarefas={tarefas} agenda={agenda} pessoas={pessoas} documentos={documentos} onSelectProtocolo={setSelectedProtocolo} onNavigate={handleNavigate} onNavigateToTarefa={handleNavigateToTarefa} formatDate={formatDate} getPrazoStatus={getPrazoStatus} />
           )}
           {activeTab === 'Pessoas / Dossiês' && (
             <Pessoas
