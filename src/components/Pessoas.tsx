@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Plus, ArrowLeft, Edit, Trash2, Building2, MapPin, FileText, Inbox, FilePlus, ExternalLink, Search, CheckSquare, Upload, Loader, Printer } from 'lucide-react'
 import type { Pessoa, Protocolo, DocumentoRecebido, DocumentoGerado, Tarefa } from '../types'
 
@@ -68,6 +68,22 @@ export const Pessoas: React.FC<PessoasProps> = ({
   const [uploading, setUploading] = useState(false)
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set())
   const [pessoaFormData, setPessoaFormData] = useState<Pessoa>({ ...PESSOA_VAZIA })
+
+  // Preserva posição do scroll quando dados atualizam via Realtime
+  const listRef = useRef<HTMLDivElement>(null)
+  const savedScrollRef = useRef(0)
+
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = savedScrollRef.current
+    }
+  }, [pessoas])
+
+  const handleListScroll = useCallback(() => {
+    if (listRef.current) {
+      savedScrollRef.current = listRef.current.scrollTop
+    }
+  }, [])
 
   const f = pessoaFormData
   const setF = (partial: Partial<Pessoa>) => setPessoaFormData(prev => ({ ...prev, ...partial }))
@@ -488,7 +504,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
         <input type="text" placeholder="Buscar por nome, órgão ou bairro..." className="w-full pl-10 pr-4 py-2 bg-surface-card border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-btn/20 text-sm" value={searchPessoa} onChange={e => setSearchPessoa(e.target.value)} />
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div ref={listRef} onScroll={handleListScroll} className="flex-1 overflow-y-auto">
         <div className="space-y-1">
           {filteredPessoas.map(p => {
             const marcada = selecionadas.has(p.id!)
