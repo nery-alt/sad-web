@@ -38,6 +38,11 @@ function getPeriodoDatas(periodo: Periodo): { inicio: Date; fim: Date; label: st
   }
 }
 
+type PessoaAtendida = {
+  pessoa: Pessoa
+  ocorrencias: Protocolo[]
+}
+
 function gerarRelatorioHTML(dados: {
   label: string
   totalProtocolos: number
@@ -50,46 +55,64 @@ function gerarRelatorioHTML(dados: {
   porBairro: { bairro: string; total: number }[]
   porAssunto: { assunto: string; total: number }[]
   pessoasRiscoLista: Pessoa[]
+  pessoasAtendidas: PessoaAtendida[]
   protocolosParados: number
 }) {
   const hoje = new Date().toLocaleDateString('pt-BR')
+
   const bairroRows = dados.porBairro.map((b, i) =>
     `<tr><td>${i + 1}</td><td>${b.bairro}</td><td><strong>${b.total}</strong></td></tr>`
   ).join('')
+
   const assuntoRows = dados.porAssunto.map((a, i) =>
     `<tr><td>${i + 1}</td><td>${a.assunto}</td><td><strong>${a.total}</strong></td></tr>`
   ).join('')
+
   const riscoRows = dados.pessoasRiscoLista.map(p =>
     `<tr><td>${p.nome}</td><td>${[p.endereco, p.bairro].filter(Boolean).join(', ')}</td><td>${p.prioridade || '—'}</td><td>${p.telefone || '—'}</td></tr>`
   ).join('')
+
+  const cadastroRows = dados.pessoasAtendidas.map((pa, i) => {
+    const endCompleto = [pa.pessoa.endereco, pa.pessoa.bairro, pa.pessoa.municipio].filter(Boolean).join(', ')
+    const ocorrencias = pa.ocorrencias.map(p => `${p.numero} — ${p.assunto}`).join('<br>')
+    return `<tr>
+      <td>${i + 1}</td>
+      <td><strong>${pa.pessoa.nome}</strong></td>
+      <td>${pa.pessoa.cpf || '—'}</td>
+      <td>${pa.pessoa.num_pessoas_familia || '—'}</td>
+      <td>${endCompleto || '—'}</td>
+      <td>${ocorrencias || '—'}</td>
+    </tr>`
+  }).join('')
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Relatório Gerencial — ${dados.label}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; background: #fff; padding: 20px; }
+    body { font-family: Arial, sans-serif; font-size: 11px; color: #111; background: #fff; padding: 20px; }
     .header { border-bottom: 2px solid #333; padding-bottom: 12px; margin-bottom: 16px; }
-    .header h1 { font-size: 16px; font-weight: bold; }
-    .header h2 { font-size: 13px; color: #555; margin-top: 4px; }
-    .header .meta { font-size: 11px; color: #777; margin-top: 6px; }
+    .header h1 { font-size: 15px; font-weight: bold; }
+    .header h2 { font-size: 12px; color: #555; margin-top: 4px; }
+    .header .meta { font-size: 10px; color: #777; margin-top: 6px; }
     .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
     .card { border: 1px solid #ccc; border-radius: 6px; padding: 10px 12px; }
-    .card .label { font-size: 10px; color: #555; text-transform: uppercase; font-weight: bold; }
-    .card .value { font-size: 24px; font-weight: bold; margin-top: 4px; }
+    .card .label { font-size: 9px; color: #555; text-transform: uppercase; font-weight: bold; }
+    .card .value { font-size: 22px; font-weight: bold; margin-top: 4px; }
     .card.azul .value { color: #1a56db; }
     .card.verde .value { color: #057a55; }
     .card.laranja .value { color: #c27803; }
     .card.vermelho .value { color: #c81e1e; }
-    section { margin-bottom: 18px; }
-    section h3 { font-size: 13px; font-weight: bold; border-left: 3px solid #1a56db; padding-left: 8px; margin-bottom: 8px; }
-    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-    th { background: #f3f4f6; text-align: left; padding: 6px 8px; font-weight: bold; border-bottom: 1px solid #ddd; }
-    td { padding: 5px 8px; border-bottom: 1px solid #eee; }
+    section { margin-bottom: 18px; page-break-inside: avoid; }
+    section h3 { font-size: 12px; font-weight: bold; border-left: 3px solid #1a56db; padding-left: 8px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    th { background: #f3f4f6; text-align: left; padding: 5px 7px; font-weight: bold; border-bottom: 1px solid #ddd; }
+    td { padding: 4px 7px; border-bottom: 1px solid #eee; vertical-align: top; }
     tr:last-child td { border-bottom: none; }
-    .assinatura { margin-top: 40px; text-align: center; }
+    .cadastro-table td:nth-child(6) { font-size: 9px; color: #444; }
+    .assinatura { margin-top: 40px; text-align: center; page-break-inside: avoid; }
     .assinatura .linha { border-top: 1px solid #333; width: 280px; margin: 0 auto 6px; }
     .assinatura p { font-size: 11px; }
-    @media print { body { padding: 10px; } }
+    @media print { body { padding: 10px; } section { page-break-inside: avoid; } }
   </style>
   </head><body>
   <div class="header">
@@ -136,6 +159,15 @@ function gerarRelatorioHTML(dados: {
     </table>
   </section>` : ''}
 
+  ${dados.pessoasAtendidas.length > 0 ? `
+  <section>
+    <h3>Cadastro de Pessoas Atendidas (${dados.pessoasAtendidas.length})</h3>
+    <table class="cadastro-table">
+      <tr><th>#</th><th>Nome</th><th>CPF</th><th>Nº Família</th><th>Endereço</th><th>Ocorrências</th></tr>
+      ${cadastroRows}
+    </table>
+  </section>` : ''}
+
   ${dados.pessoasRiscoLista.length > 0 ? `
   <section>
     <h3>Pessoas em Área de Risco</h3>
@@ -165,9 +197,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const periodoDatas = useMemo(() => getPeriodoDatas(periodo), [periodo])
 
-  // Laudos vindos do Sentinela DC
   const laudosSentinela = useMemo(() =>
-    documentos.filter(d => d.caminho?.includes('/sentinela/'))
+    documentos.filter(d => (d.caminho || '').includes('/sentinela/'))
   , [documentos])
 
   const inicioSemana = useMemo(() => {
@@ -192,7 +223,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     protocolos.filter(p => { if (p.status === 'concluido') return false; const diffDias = Math.floor((now.getTime() - new Date(p.atualizado_em).getTime()) / 86400000); return diffDias >= 7 })
   , [protocolos, now])
 
-  // Dados do relatório filtrados pelo período
   const dadosRelatorio = useMemo(() => {
     const { inicio, fim, label } = periodoDatas
     const filtrados = protocolos.filter(p => {
@@ -205,10 +235,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       return d2 >= inicio && d2 <= fim
     })
 
-    // Por bairro (via pessoa_endereco — usamos pessoa_nome como proxy, pois bairro não está direto no protocolo)
+    // Por bairro
     const bairroMap: Record<string, number> = {}
     filtrados.forEach(p => {
-      // Tenta pegar bairro da pessoa correspondente
       const pessoa = pessoas.find(pe => pe.nome === p.pessoa_nome)
       const bairro = pessoa?.bairro || 'Não informado'
       bairroMap[bairro] = (bairroMap[bairro] || 0) + 1
@@ -228,6 +257,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
       .map(([assunto, total]) => ({ assunto, total }))
       .sort((a, b) => b.total - a.total)
 
+    // Pessoas atendidas no período — agrupadas por pessoa com suas ocorrências
+    const pessoaMap: Record<number, PessoaAtendida> = {}
+    filtrados.forEach(pr => {
+      const pessoa = pessoas.find(pe => pe.nome === pr.pessoa_nome)
+      if (!pessoa || !pessoa.id) return
+      if (!pessoaMap[pessoa.id]) {
+        pessoaMap[pessoa.id] = { pessoa, ocorrencias: [] }
+      }
+      pessoaMap[pessoa.id].ocorrencias.push(pr)
+    })
+    const pessoasAtendidas = Object.values(pessoaMap)
+      .sort((a, b) => a.pessoa.nome.localeCompare(b.pessoa.nome))
+
     return {
       label,
       totalProtocolos: filtrados.length,
@@ -240,6 +282,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       porBairro,
       porAssunto,
       pessoasRiscoLista: pessoasRisco,
+      pessoasAtendidas,
       protocolosParados: protocolosParados.length,
     }
   }, [periodoDatas, protocolos, laudosSentinela, pessoas, pessoasRisco, pessoasUrgentes, protocolosParados])
@@ -283,7 +326,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <button onClick={() => setRelatorioOpen(false)} className="text-text-secondary hover:text-text-main p-1"><X size={20} /></button>
             </div>
 
-            <div className="p-4 border-b border-gray-100 flex items-center gap-3">
+            <div className="p-4 border-b border-gray-100 flex items-center gap-3 flex-wrap">
               <span className="text-sm font-bold text-text-secondary">Período:</span>
               {([
                 { value: 'mes_atual', label: 'Mês atual' },
@@ -368,6 +411,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               )}
 
+              {/* Pessoas atendidas */}
+              {dadosRelatorio.pessoasAtendidas.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-bold mb-2 text-text-secondary uppercase">Cadastro de Pessoas Atendidas ({dadosRelatorio.pessoasAtendidas.length})</h3>
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    {dadosRelatorio.pessoasAtendidas.map((pa, i) => (
+                      <div key={i} className="px-4 py-3 border-b border-gray-100 last:border-0">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-sm font-bold">{pa.pessoa.nome}</p>
+                            <p className="text-xs text-text-secondary mt-0.5">
+                              CPF: {pa.pessoa.cpf || '—'} &nbsp;·&nbsp;
+                              Família: {pa.pessoa.num_pessoas_familia || '—'} pessoa(s)
+                            </p>
+                            <p className="text-xs text-text-secondary">{[pa.pessoa.endereco, pa.pessoa.bairro, pa.pessoa.municipio].filter(Boolean).join(', ') || '—'}</p>
+                          </div>
+                          <span className="text-xs bg-primary-btn/10 text-primary-btn font-bold px-2 py-0.5 rounded shrink-0 ml-2">{pa.ocorrencias.length} ocorrência(s)</span>
+                        </div>
+                        <div className="mt-1 space-y-0.5">
+                          {pa.ocorrencias.map(oc => (
+                            <p key={oc.id} className="text-xs text-text-secondary">• {oc.numero} — {oc.assunto}</p>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Pessoas em risco */}
               {dadosRelatorio.pessoasRiscoLista.length > 0 && (
                 <div>
@@ -391,7 +463,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             <div className="p-4 border-t border-gray-100 flex justify-between items-center">
-              <p className="text-xs text-text-secondary">Período: <strong>{dadosRelatorio.label}</strong> · {dadosRelatorio.totalProtocolos} protocolo(s)</p>
+              <p className="text-xs text-text-secondary">Período: <strong>{dadosRelatorio.label}</strong> · {dadosRelatorio.totalProtocolos} protocolo(s) · {dadosRelatorio.pessoasAtendidas.length} pessoa(s)</p>
               <button onClick={handleImprimir} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm">
                 <Printer size={16} /> Imprimir / Exportar PDF
               </button>
@@ -459,7 +531,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Corpo principal */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
-          {/* Laudos do Sentinela */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-bold flex items-center gap-2"><Inbox size={16} className="text-success" /> Últimos Laudos do Sentinela DC</h3>
@@ -485,7 +556,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <button onClick={() => onNavigate('Documentos Recebidos')} className="mt-3 w-full text-xs font-bold text-primary-btn hover:underline text-center">Ver todos os documentos →</button>
           </div>
 
-          {/* Protocolos recentes */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-bold flex items-center gap-2"><FileText size={16} className="text-primary-btn" /> Protocolos Recentes</h3>
@@ -512,7 +582,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <button onClick={() => onNavigate('Protocolos')} className="mt-3 w-full text-xs font-bold text-primary-btn hover:underline text-center">Ver todos os protocolos →</button>
           </div>
 
-          {/* Pessoas em área de risco */}
           {pessoasRisco.length > 0 && (
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
               <h3 className="font-bold flex items-center gap-2 mb-3"><MapPin size={16} className="text-deadline-alert" /> Pessoas em Área de Risco ({pessoasRisco.length})</h3>
@@ -529,7 +598,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
 
-        {/* Coluna direita */}
         <div className="space-y-4">
           <div className="bg-sidebar-bg text-white p-4 rounded-xl shadow-lg">
             <h3 className="font-bold mb-1 flex items-center gap-2"><Calendar size={16} className="text-active-highlight" /> Próximos Compromissos</h3>
