@@ -45,13 +45,25 @@ export interface Protocolo {
   data_entrada: string
   prazo: string
   status: 'aberto' | 'em_andamento' | 'concluido'
-  historico: string // JSON string
+  historico: string
   criado_em: string
   atualizado_em: string
   pessoa_nome?: string
   pessoa_endereco?: string
   pessoa_telefone?: string
   pessoa_cpf?: string
+}
+
+export interface Encaminhamento {
+  id?: number
+  protocolo_id: number
+  orgao: string
+  data_envio: string
+  descricao?: string
+  status: 'pendente' | 'respondido' | 'arquivado'
+  retorno?: string
+  data_retorno?: string
+  criado_em: string
 }
 
 export interface DocumentoRecebido {
