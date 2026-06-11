@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Search, Users, FileText, Inbox, FilePlus, CheckSquare, Calendar, MapPin, Clock } from 'lucide-react'
+import { Search, Users, FileText, Inbox, FilePlus, CheckSquare, Calendar, MapPin } from 'lucide-react'
 import type { Pessoa, Protocolo, DocumentoRecebido, DocumentoGerado, Tarefa, AgendaItem } from '../types'
 
 interface BuscaGlobalProps {
@@ -26,26 +26,28 @@ export const BuscaGlobal: React.FC<BuscaGlobalProps> = ({
 
   // ── MODO GERAL ──────────────────────────────────────────────────
   const resultsGeral = useMemo(() => {
-    if (modo !== 'geral' || searchTerm.length < 3) return { pessoas: [], protocolos: [], documentos: [], documentosGerados: [], tarefas: [], agenda: [] }
+    if (modo !== 'geral' || searchTerm.length < 3) {
+      return { pessoas: [], protocolos: [], documentos: [], documentosGerados: [], tarefas: [], agenda: [] }
+    }
     const term = searchTerm.toLowerCase()
     return {
       pessoas: pessoas.filter(p =>
         p.nome.toLowerCase().includes(term) ||
-        p.orgao?.toLowerCase().includes(term) ||
-        p.cpf?.toLowerCase().includes(term)
+        (p.orgao || '').toLowerCase().includes(term) ||
+        (p.cpf || '').toLowerCase().includes(term)
       ).slice(0, 5),
       protocolos: protocolos.filter(p =>
         p.numero.toLowerCase().includes(term) ||
         p.assunto.toLowerCase().includes(term) ||
-        p.pessoa_nome?.toLowerCase().includes(term)
+        (p.pessoa_nome || '').toLowerCase().includes(term)
       ).slice(0, 5),
       documentos: documentos.filter(d =>
         d.nome.toLowerCase().includes(term) ||
-        d.pessoa_nome?.toLowerCase().includes(term)
+        (d.pessoa_nome || '').toLowerCase().includes(term)
       ).slice(0, 5),
       documentosGerados: documentosGerados.filter(d =>
         d.titulo.toLowerCase().includes(term) ||
-        d.pessoa_nome?.toLowerCase().includes(term)
+        (d.pessoa_nome || '').toLowerCase().includes(term)
       ).slice(0, 5),
       tarefas: tarefas.filter(t => t.titulo.toLowerCase().includes(term)).slice(0, 5),
       agenda: agenda.filter(a => a.titulo.toLowerCase().includes(term)).slice(0, 5),
@@ -55,29 +57,29 @@ export const BuscaGlobal: React.FC<BuscaGlobalProps> = ({
   const totalGeral = Object.values(resultsGeral).reduce((sum, arr) => sum + arr.length, 0)
 
   // ── MODO ENDEREÇO ────────────────────────────────────────────────
-  // Encontra pessoas cujo endereço, bairro ou ponto de referência bate com a busca
   const pessoasEndereco = useMemo(() => {
     if (modo !== 'endereco' || searchTerm.length < 3) return []
     const term = searchTerm.toLowerCase()
     return pessoas.filter(p =>
-      p.endereco?.toLowerCase().includes(term) ||
-      p.bairro?.toLowerCase().includes(term) ||
-      p.ponto_referencia?.toLowerCase().includes(term) ||
-      p.municipio?.toLowerCase().includes(term)
+      (p.endereco || '').toLowerCase().includes(term) ||
+      (p.bairro || '').toLowerCase().includes(term) ||
+      (p.ponto_referencia || '').toLowerCase().includes(term) ||
+      (p.municipio || '').toLowerCase().includes(term)
     )
   }, [searchTerm, modo, pessoas])
 
-  // Para cada pessoa encontrada, monta o histórico completo
   const historicoPorPessoa = useMemo(() =>
     pessoasEndereco.map(p => {
-      const prots = protocolos.filter(pr => pr.pessoa_id === p.id)
+      const prots = protocolos
+        .filter(pr => pr.pessoa_id === p.id)
         .sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime())
-      const docs = documentos.filter(d => d.pessoa_id === p.id)
+      const docs = documentos
+        .filter(d => d.pessoa_id === p.id)
         .sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime())
-      const laudos = docs.filter(d => d.caminho?.includes('/sentinela/'))
-      const docsGerados = documentosGerados.filter(d => d.pessoa_id === p.id)
-      const tfs = tarefas.filter(t => t.pessoa_id === p.id)
-      return { pessoa: p, protocolos: prots, laudos, docs, docsGerados, tarefas: tfs }
+      const laudos = docs.filter(d => (d.caminho || '').includes('/sentinela/'))
+      const docsG = documentosGerados.filter(d => d.pessoa_id === p.id)
+      const tfs = tarefas.filter(t => t.pessoa_id === p.id && t.status !== 'concluida' && t.status !== 'arquivada')
+      return { pessoa: p, prots, laudos, docsG, tfs }
     })
   , [pessoasEndereco, protocolos, documentos, documentosGerados, tarefas])
 
@@ -138,7 +140,7 @@ export const BuscaGlobal: React.FC<BuscaGlobalProps> = ({
                     {resultsGeral.pessoas.map(p => (
                       <div key={p.id} onClick={() => { onSelectPessoa(p); onNavigate('Pessoas / Dossiês') }} className="p-3 bg-white border border-gray-100 rounded-lg hover:border-primary-btn/30 cursor-pointer transition-all">
                         <p className="font-bold text-sm">{p.nome}</p>
-                        <p className="text-xs text-text-secondary">{p.orgao || 'Sem órgão'} {p.bairro ? `· ${p.bairro}` : ''}</p>
+                        <p className="text-xs text-text-secondary">{p.orgao || 'Sem órgão'}{p.bairro ? ` · ${p.bairro}` : ''}</p>
                       </div>
                     ))}
                   </div>
@@ -220,17 +222,17 @@ export const BuscaGlobal: React.FC<BuscaGlobalProps> = ({
           {pessoasEndereco.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <MapPin size={32} className="text-gray-300 mb-3" />
-              <p className="text-text-secondary">Nenhum registro encontrado para "{searchTerm}"</p>
-              <p className="text-xs text-text-secondary mt-1">Tente buscar por rua, bairro ou ponto de referência.</p>
+              <p className="text-text-secondary">Nenhum registro para "{searchTerm}"</p>
+              <p className="text-xs text-text-secondary mt-1">Tente buscar por rua, bairro ou referência.</p>
             </div>
           ) : (
             <>
               <p className="text-sm text-text-secondary shrink-0">
-                <strong>{pessoasEndereco.length}</strong> pessoa(s) encontrada(s) em endereços com "<strong>{searchTerm}</strong>"
+                <strong>{pessoasEndereco.length}</strong> pessoa(s) em endereços com "<strong>{searchTerm}</strong>"
               </p>
-              {historicoPorPessoa.map(({ pessoa, protocolos: prots, laudos, docs, docsGerados, tarefas: tfs }) => (
+              {historicoPorPessoa.map(({ pessoa, prots, laudos, docsG, tfs }) => (
                 <div key={pessoa.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                  {/* Cabeçalho da pessoa */}
+                  {/* Cabeçalho */}
                   <div
                     className="p-4 bg-primary-btn/5 border-b border-primary-btn/10 cursor-pointer hover:bg-primary-btn/10 transition-colors"
                     onClick={() => { onSelectPessoa(pessoa); onNavigate('Pessoas / Dossiês') }}
@@ -244,31 +246,30 @@ export const BuscaGlobal: React.FC<BuscaGlobalProps> = ({
                         </p>
                         {pessoa.ponto_referencia && <p className="text-xs text-text-secondary mt-0.5">Ref: {pessoa.ponto_referencia}</p>}
                       </div>
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
                         {pessoa.area_risco && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-700">⚠️ Área de risco</span>}
                         {pessoa.prioridade && <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${pessoa.prioridade === 'Alta' || pessoa.prioridade === 'Emergencial' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>⚑ {pessoa.prioridade}</span>}
-                        <span className="text-[10px] text-text-secondary">{pessoa.telefone || ''}</span>
+                        {pessoa.telefone && <span className="text-[10px] text-text-secondary">{pessoa.telefone}</span>}
                       </div>
                     </div>
-                    <div className="flex gap-3 mt-2">
+                    <div className="flex gap-2 mt-2 flex-wrap">
                       <span className="text-xs bg-white border border-gray-200 px-2 py-0.5 rounded font-bold">{prots.length} protocolo(s)</span>
                       <span className="text-xs bg-white border border-gray-200 px-2 py-0.5 rounded font-bold">{laudos.length} laudo(s)</span>
-                      {tfs.length > 0 && <span className="text-xs bg-white border border-gray-200 px-2 py-0.5 rounded font-bold">{tfs.length} tarefa(s)</span>}
+                      {tfs.length > 0 && <span className="text-xs bg-white border border-gray-200 px-2 py-0.5 rounded font-bold">{tfs.length} tarefa(s) pendente(s)</span>}
                     </div>
                   </div>
 
                   {/* Linha do tempo */}
                   <div className="p-4">
-                    {prots.length === 0 && laudos.length === 0 && docsGerados.length === 0 ? (
+                    {prots.length === 0 && laudos.length === 0 && docsG.length === 0 ? (
                       <p className="text-xs text-text-secondary italic">Nenhum registro de atendimento ainda.</p>
                     ) : (
                       <div className="space-y-2">
-                        {/* Protocolos */}
                         {prots.map(pr => (
                           <div
                             key={pr.id}
                             onClick={() => { onSelectProtocolo(pr); onNavigate('Protocolos') }}
-                            className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-transparent hover:border-gray-200"
+                            className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer border border-transparent hover:border-gray-200 transition-colors"
                           >
                             <div className="shrink-0 w-6 h-6 rounded-full bg-primary-btn/10 flex items-center justify-center mt-0.5">
                               <FileText size={12} className="text-primary-btn" />
@@ -280,14 +281,11 @@ export const BuscaGlobal: React.FC<BuscaGlobalProps> = ({
                                   {pr.status.replace('_', ' ')}
                                 </span>
                               </div>
-                              <p className="text-xs text-text-secondary flex items-center gap-1 mt-0.5">
-                                <Clock size={10} /> {formatDate(pr.criado_em)}
-                              </p>
+                              <p className="text-xs text-text-secondary mt-0.5">{formatDate(pr.criado_em)}</p>
                             </div>
                           </div>
                         ))}
 
-                        {/* Laudos do Sentinela */}
                         {laudos.map(d => (
                           <div key={d.id} className="flex items-start gap-3 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50">
                             <div className="shrink-0 w-6 h-6 rounded-full bg-success/10 flex items-center justify-center mt-0.5">
@@ -301,39 +299,31 @@ export const BuscaGlobal: React.FC<BuscaGlobalProps> = ({
                                 )}
                               </div>
                               {d.descricao && <p className="text-xs text-text-secondary">{d.descricao}</p>}
-                              <p className="text-xs text-text-secondary flex items-center gap-1 mt-0.5">
-                                <Clock size={10} /> {formatDate(d.criado_em)}
-                              </p>
+                              <p className="text-xs text-text-secondary mt-0.5">{formatDate(d.criado_em)}</p>
                             </div>
                           </div>
                         ))}
 
-                        {/* Documentos gerados */}
-                        {docsGerados.map(d => (
+                        {docsG.map(d => (
                           <div key={d.id} className="flex items-start gap-3 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50">
                             <div className="shrink-0 w-6 h-6 rounded-full bg-deadline-alert/10 flex items-center justify-center mt-0.5">
                               <FilePlus size={12} className="text-deadline-alert" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-bold">{d.titulo}</p>
-                              <p className="text-xs text-text-secondary flex items-center gap-1 mt-0.5">
-                                <Clock size={10} /> {formatDate(d.criado_em)} · {d.tipo}
-                              </p>
+                              <p className="text-xs text-text-secondary mt-0.5">{formatDate(d.criado_em)} · {d.tipo}</p>
                             </div>
                           </div>
                         ))}
 
-                        {/* Tarefas abertas */}
-                        {tfs.filter(t => t.status !== 'concluida').map(t => (
+                        {tfs.map(t => (
                           <div key={t.id} className="flex items-start gap-3 p-2 rounded-lg border border-transparent hover:border-gray-200 hover:bg-gray-50">
                             <div className="shrink-0 w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center mt-0.5">
                               <CheckSquare size={12} className="text-gray-500" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-bold">{t.titulo}</p>
-                              <p className="text-xs text-text-secondary flex items-center gap-1 mt-0.5">
-                                <Clock size={10} /> Prazo: {formatDate(t.prazo)} · {(t.prioridade || 'baixa').toUpperCase()}
-                              </p>
+                              <p className="text-xs text-text-secondary mt-0.5">Prazo: {formatDate(t.prazo)} · {(t.prioridade || 'baixa').toUpperCase()}</p>
                             </div>
                           </div>
                         ))}
@@ -350,10 +340,11 @@ export const BuscaGlobal: React.FC<BuscaGlobalProps> = ({
       {/* Estado inicial */}
       {searchTerm.length < 3 && (
         <div className="flex-1 flex flex-col items-center justify-center text-center opacity-40">
-          {modo === 'geral'
-            ? <><Search size={48} className="mb-4" /><p className="text-lg">Digite para buscar em todo o sistema</p></>
-            : <><MapPin size={48} className="mb-4" /><p className="text-lg">Digite um endereço, bairro ou referência</p><p className="text-sm mt-2">Ver todo o histórico de atendimentos do local</p></>
-          }
+          {modo === 'geral' ? (
+            <><Search size={48} className="mb-4" /><p className="text-lg">Digite para buscar em todo o sistema</p></>
+          ) : (
+            <><MapPin size={48} className="mb-4" /><p className="text-lg">Digite um endereço, bairro ou referência</p><p className="text-sm mt-2">Ver todo o histórico de atendimentos do local</p></>
+          )}
         </div>
       )}
     </div>
