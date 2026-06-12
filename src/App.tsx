@@ -12,6 +12,7 @@ import { Tarefas } from './components/Tarefas'
 import { Agenda } from './components/Agenda'
 import { BuscaGlobal } from './components/BuscaGlobal'
 import { Configuracoes } from './components/Configuracoes'
+import { MapaOcorrencias } from './components/MapaOcorrencias'
 import type {
   Pessoa,
   Protocolo,
@@ -454,6 +455,7 @@ const App: React.FC = () => {
               onNavigateToTarefa={handleNavigateToTarefa} formatDate={formatDate} getPrazoStatus={getPrazoStatus}
             />
           )}
+          {activeTab === 'Mapa de Ocorrências' && <MapaOcorrencias />}
           {activeTab === 'Pessoas / Dossiês' && (
             <Pessoas
               pessoas={pessoas} protocolos={protocolos} documentos={documentos}

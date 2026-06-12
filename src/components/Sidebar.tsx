@@ -10,6 +10,7 @@ import {
   Search,
   Settings,
   LogOut,
+  MapPin,
 } from 'lucide-react'
 
 interface MenuItem {
@@ -26,6 +27,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, onLogout }) => {
   const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+    { name: 'Mapa de Ocorrências', icon: <MapPin size={20} /> },
     { name: 'Pessoas / Dossiês', icon: <Users size={20} /> },
     { name: 'Protocolos', icon: <FileText size={20} /> },
     { name: 'Documentos Recebidos', icon: <Inbox size={20} /> },
