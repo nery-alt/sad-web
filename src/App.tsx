@@ -21,6 +21,7 @@ import type {
   AgendaItem,
   Config,
   Movimentacao,
+  Encaminhamento,
 } from './types'
 import type { Session } from '@supabase/supabase-js'
 
@@ -38,6 +39,8 @@ const App: React.FC = () => {
 
   const [protocolos, setProtocolos] = useState<Protocolo[]>([])
   const [selectedProtocolo, setSelectedProtocolo] = useState<Protocolo | null>(null)
+
+  const [encaminhamentos, setEncaminhamentos] = useState<Encaminhamento[]>([])
 
   const [documentos, setDocumentos] = useState<DocumentoRecebido[]>([])
   const [documentosGerados, setDocumentosGerados] = useState<DocumentoGerado[]>([])
@@ -60,7 +63,6 @@ const App: React.FC = () => {
   const channelRef = useRef<any>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Auth listener
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -88,6 +90,12 @@ const App: React.FC = () => {
       pessoa_telefone: r.pessoa?.telefone,
       pessoa_cpf: r.pessoa?.cpf,
     })))
+
+    const { data: enc } = await supabase
+      .from('encaminhamentos')
+      .select('*')
+      .order('criado_em', { ascending: false })
+    if (enc) setEncaminhamentos(enc)
 
     const { data: dr } = await supabase
       .from('documentos_recebidos')
@@ -144,6 +152,7 @@ const App: React.FC = () => {
       .channel(`sad-realtime-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pessoas' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'protocolos' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'encaminhamentos' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos_recebidos' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'documentos_gerados' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tarefas' }, () => fetchData())
@@ -235,76 +244,41 @@ const App: React.FC = () => {
     setSelectedPessoa(null)
   }
 
-  // Upload real para Supabase Storage
-const handleImportDoc = async (pessoaId: number, file: File) => {
-  const now = new Date()
-  const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-  
-  // Pega só a extensão e gera nome limpo com timestamp
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
-  const filePath = `pessoas/${pessoaId}/${Date.now()}.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(filePath, file, { upsert: false })
-
-  if (uploadError) {
-    alert('Erro ao enviar arquivo: ' + uploadError.message)
-    return
+  const handleImportDoc = async (pessoaId: number, file: File) => {
+    const now = new Date()
+    const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
+    const filePath = `pessoas/${pessoaId}/${Date.now()}.${ext}`
+    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(filePath, file, { upsert: false })
+    if (uploadError) { alert('Erro ao enviar arquivo: ' + uploadError.message); return }
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
+    await supabase.from('documentos_recebidos').insert({
+      pessoa_id: pessoaId, protocolo_id: null, nome: file.name, tipo: file.type,
+      caminho: urlData.publicUrl, descricao: '', data_recebimento: dataRec, criado_em: new Date().toISOString(),
+    })
   }
 
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
-
-  await supabase.from('documentos_recebidos').insert({
-    pessoa_id: pessoaId,
-    protocolo_id: null,
-    nome: file.name,      // nome original exibido na tela
-    tipo: file.type,
-    caminho: urlData.publicUrl,
-    descricao: '',
-    data_recebimento: dataRec,
-    criado_em: new Date().toISOString(),
-  })
-}
-
-const handleImportDocGlobal = async (file: File) => {
-  const now = new Date()
-  const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
-  const filePath = `global/${Date.now()}.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(filePath, file, { upsert: false })
-
-  if (uploadError) {
-    alert('Erro ao enviar arquivo: ' + uploadError.message)
-    return
+  const handleImportDocGlobal = async (file: File) => {
+    const now = new Date()
+    const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
+    const filePath = `global/${Date.now()}.${ext}`
+    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(filePath, file, { upsert: false })
+    if (uploadError) { alert('Erro ao enviar arquivo: ' + uploadError.message); return }
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
+    await supabase.from('documentos_recebidos').insert({
+      pessoa_id: null, protocolo_id: null, nome: file.name, tipo: file.type,
+      caminho: urlData.publicUrl, descricao: '', data_recebimento: dataRec, criado_em: new Date().toISOString(),
+    })
   }
 
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
-
-  await supabase.from('documentos_recebidos').insert({
-    pessoa_id: null,
-    protocolo_id: null,
-    nome: file.name,
-    tipo: file.type,
-    caminho: urlData.publicUrl,
-    descricao: '',
-    data_recebimento: dataRec,
-    criado_em: new Date().toISOString(),
-  })
-}
-  
   const handleOpenFile = async (filePath: string) => {
     if (!filePath || filePath === '') return
     if (filePath.startsWith('http')) window.open(filePath, '_blank')
   }
 
-  // Delete arquivo do Storage + registro do banco
   const handleDeleteDocumento = async (id: number, caminho?: string) => {
     if (!window.confirm('Remover o registro deste documento?')) return
-    // Se for arquivo na nuvem, extrai o path e deleta do Storage
     if (caminho?.startsWith('http')) {
       try {
         const url = new URL(caminho)
@@ -313,7 +287,7 @@ const handleImportDocGlobal = async (file: File) => {
           const storagePath = decodeURIComponent(pathParts[1].split('?')[0])
           await supabase.storage.from(BUCKET).remove([storagePath])
         }
-      } catch { /* ignora erros de parse de URL */ }
+      } catch { }
     }
     await supabase.from('documentos_recebidos').delete().eq('id', id)
   }
@@ -328,31 +302,17 @@ const handleImportDocGlobal = async (file: File) => {
     setDocGeradoFormOpen(true)
   }
 
- const handleSaveProtocolo = async (protocolo: Protocolo) => {
-  const now = new Date().toISOString()
-  const { pessoa_nome, pessoa_endereco, pessoa_telefone, pessoa_cpf,
-          criado_em, atualizado_em, id, ...data } = protocolo
-  const historico = typeof data.historico === 'string'
-    ? JSON.parse(data.historico || '[]')
-    : data.historico
-
-  // Converte strings vazias em null para campos date
-  const payload = {
-    ...data,
-    historico,
-    data_entrada: data.data_entrada || null,
-    prazo: data.prazo || null,
+  const handleSaveProtocolo = async (protocolo: Protocolo) => {
+    const now = new Date().toISOString()
+    const { pessoa_nome, pessoa_endereco, pessoa_telefone, pessoa_cpf, criado_em, atualizado_em, id, ...data } = protocolo
+    const historico = typeof data.historico === 'string' ? JSON.parse(data.historico || '[]') : data.historico
+    const payload = { ...data, historico, data_entrada: data.data_entrada || null, prazo: data.prazo || null }
+    if (protocolo.id) {
+      await supabase.from('protocolos').update({ ...payload, atualizado_em: now }).eq('id', protocolo.id)
+    } else {
+      await supabase.from('protocolos').insert({ ...payload, criado_em: now, atualizado_em: now })
+    }
   }
-
-  if (protocolo.id) {
-    await supabase.from('protocolos')
-      .update({ ...payload, atualizado_em: now })
-      .eq('id', protocolo.id)
-  } else {
-    await supabase.from('protocolos')
-      .insert({ ...payload, criado_em: now, atualizado_em: now })
-  }
-}
 
   const handleDeleteProtocolo = async (id: number) => {
     if (!window.confirm('Excluir este protocolo e seus vinculados?')) return
@@ -373,6 +333,21 @@ const handleImportDocGlobal = async (file: File) => {
     await supabase.from('protocolos').update({ historico, atualizado_em: new Date().toISOString() }).eq('id', id)
     if (selectedProtocolo?.id === id)
       setSelectedProtocolo(prev => prev ? { ...prev, historico: JSON.stringify(historico) } : null)
+  }
+
+  // ── Encaminhamentos ──────────────────────────────────────────────
+  const handleSaveEncaminhamento = async (enc: Encaminhamento) => {
+    const now = new Date().toISOString()
+    await supabase.from('encaminhamentos').insert({ ...enc, criado_em: now })
+  }
+
+  const handleDeleteEncaminhamento = async (id: number) => {
+    if (!window.confirm('Excluir este encaminhamento?')) return
+    await supabase.from('encaminhamentos').delete().eq('id', id)
+  }
+
+  const handleUpdateEncaminhamentoStatus = async (id: number, status: Encaminhamento['status']) => {
+    await supabase.from('encaminhamentos').update({ status }).eq('id', id)
   }
 
   const handleSaveDocumentoGerado = async (documento: DocumentoGerado) => {
@@ -413,13 +388,9 @@ const handleImportDocGlobal = async (file: File) => {
   const handleSaveAgenda = async (item: AgendaItem) => {
     const now = new Date().toISOString()
     const payload = {
-      titulo: item.titulo,
-      descricao: item.descricao || '',
-      data: item.data,
-      horario: item.horario || '',
-      realizado: item.realizado ?? 0,
-      pessoa_id: item.pessoa_id ?? null,
-      protocolo_id: item.protocolo_id ?? null,
+      titulo: item.titulo, descricao: item.descricao || '', data: item.data,
+      horario: item.horario || '', realizado: item.realizado ?? 0,
+      pessoa_id: item.pessoa_id ?? null, protocolo_id: item.protocolo_id ?? null,
     }
     if (item.id) {
       await supabase.from('agenda').update(payload).eq('id', item.id)
@@ -475,35 +446,78 @@ const handleImportDocGlobal = async (file: File) => {
           userEmail={session.user.email}
         />
         <div className="flex-1 overflow-hidden">
-           {activeTab === 'Dashboard' && (
-            <Dashboard protocolos={protocolos} tarefas={tarefas} agenda={agenda} pessoas={pessoas} documentos={documentos} onSelectProtocolo={setSelectedProtocolo} onNavigate={handleNavigate} onNavigateToTarefa={handleNavigateToTarefa} formatDate={formatDate} getPrazoStatus={getPrazoStatus} />
+          {activeTab === 'Dashboard' && (
+            <Dashboard
+              protocolos={protocolos} tarefas={tarefas} agenda={agenda}
+              pessoas={pessoas} documentos={documentos}
+              onSelectProtocolo={setSelectedProtocolo} onNavigate={handleNavigate}
+              onNavigateToTarefa={handleNavigateToTarefa} formatDate={formatDate} getPrazoStatus={getPrazoStatus}
+            />
           )}
           {activeTab === 'Pessoas / Dossiês' && (
             <Pessoas
-              pessoas={pessoas} protocolos={protocolos} documentos={documentos} documentosGerados={documentosGerados} tarefas={tarefas}
-              selectedPessoa={selectedPessoa} onSelectPessoa={setSelectedPessoa} onSavePessoa={handleSavePessoa} onDeletePessoa={handleDeletePessoa}
-              onImportDoc={handleImportDoc} onOpenFile={handleOpenFile} onDeleteDoc={handleDeleteDocumento}
-              onDeleteDocGerado={handleDeleteDocumentoGerado} onNewDocGerado={handleNewDocGerado} onEditDocGerado={handleEditDocGerado}
+              pessoas={pessoas} protocolos={protocolos} documentos={documentos}
+              documentosGerados={documentosGerados} tarefas={tarefas}
+              selectedPessoa={selectedPessoa} onSelectPessoa={setSelectedPessoa}
+              onSavePessoa={handleSavePessoa} onDeletePessoa={handleDeletePessoa}
+              onImportDoc={handleImportDoc} onOpenFile={handleOpenFile}
+              onDeleteDoc={handleDeleteDocumento} onDeleteDocGerado={handleDeleteDocumentoGerado}
+              onNewDocGerado={handleNewDocGerado} onEditDocGerado={handleEditDocGerado}
               onNewTarefa={handleNewTarefaFromPessoa} formatDate={formatDate}
             />
           )}
           {activeTab === 'Protocolos' && (
-            <Protocolos protocolos={protocolos} pessoas={pessoas} tarefas={tarefas} selectedProtocolo={selectedProtocolo} onSelectProtocolo={setSelectedProtocolo} onSaveProtocolo={handleSaveProtocolo} onDeleteProtocolo={handleDeleteProtocolo} onUpdateStatus={handleUpdateProtocoloStatus} onAddMovimentacao={handleAddMovimentacao} onNewTarefa={handleNewTarefaFromProtocolo} formatDate={formatDate} getPrazoStatus={getPrazoStatus} />
+            <Protocolos
+              protocolos={protocolos} pessoas={pessoas} tarefas={tarefas}
+              encaminhamentos={encaminhamentos}
+              selectedProtocolo={selectedProtocolo} onSelectProtocolo={setSelectedProtocolo}
+              onSaveProtocolo={handleSaveProtocolo} onDeleteProtocolo={handleDeleteProtocolo}
+              onUpdateStatus={handleUpdateProtocoloStatus} onAddMovimentacao={handleAddMovimentacao}
+              onNewTarefa={handleNewTarefaFromProtocolo}
+              onSaveEncaminhamento={handleSaveEncaminhamento}
+              onDeleteEncaminhamento={handleDeleteEncaminhamento}
+              onUpdateEncaminhamentoStatus={handleUpdateEncaminhamentoStatus}
+              formatDate={formatDate} getPrazoStatus={getPrazoStatus}
+            />
           )}
-         {activeTab === 'Documentos Recebidos' && (
-  <DocumentosRecebidos documentos={documentos} pessoas={pessoas} onOpenFile={handleOpenFile} onDeleteDoc={(id) => handleDeleteDocumento(id)} onSelectPessoa={setSelectedPessoa} onNavigate={handleNavigate} onImportDoc={handleImportDocGlobal} formatDate={formatDate} />
-)}
+          {activeTab === 'Documentos Recebidos' && (
+            <DocumentosRecebidos
+              documentos={documentos} pessoas={pessoas} onOpenFile={handleOpenFile}
+              onDeleteDoc={(id) => handleDeleteDocumento(id)} onSelectPessoa={setSelectedPessoa}
+              onNavigate={handleNavigate} onImportDoc={handleImportDocGlobal} formatDate={formatDate}
+            />
+          )}
           {activeTab === 'Documentos Gerados' && (
-            <DocumentosGerados documentosGerados={documentosGerados} pessoas={pessoas} onOpenFile={handleOpenFile} onDeleteDocGerado={handleDeleteDocumentoGerado} onSelectPessoa={setSelectedPessoa} onNavigate={handleNavigate} formatDate={formatDate} />
+            <DocumentosGerados
+              documentosGerados={documentosGerados} pessoas={pessoas} onOpenFile={handleOpenFile}
+              onDeleteDocGerado={handleDeleteDocumentoGerado} onSelectPessoa={setSelectedPessoa}
+              onNavigate={handleNavigate} formatDate={formatDate}
+            />
           )}
           {activeTab === 'Tarefas' && (
-            <Tarefas tarefas={tarefas} pessoas={pessoas} protocolos={protocolos} selectedTarefa={selectedTarefa} onSelectTarefa={setSelectedTarefa} onSaveTarefa={handleSaveTarefa} onToggleStatus={handleToggleTarefaStatus} onDeleteTarefa={handleDeleteTarefa} onNavigateToPessoa={handleNavigateToPessoa} onNavigateToProtocolo={handleNavigateToProtocolo} newTarefaInit={newTarefaInit} onClearNewTarefaInit={() => setNewTarefaInit(null)} formatDate={formatDate} getPrazoStatus={getPrazoStatus} />
+            <Tarefas
+              tarefas={tarefas} pessoas={pessoas} protocolos={protocolos}
+              selectedTarefa={selectedTarefa} onSelectTarefa={setSelectedTarefa}
+              onSaveTarefa={handleSaveTarefa} onToggleStatus={handleToggleTarefaStatus}
+              onDeleteTarefa={handleDeleteTarefa} onNavigateToPessoa={handleNavigateToPessoa}
+              onNavigateToProtocolo={handleNavigateToProtocolo} newTarefaInit={newTarefaInit}
+              onClearNewTarefaInit={() => setNewTarefaInit(null)} formatDate={formatDate} getPrazoStatus={getPrazoStatus}
+            />
           )}
           {activeTab === 'Agenda' && (
-            <Agenda agenda={agenda} pessoas={pessoas} protocolos={protocolos} onSaveAgenda={handleSaveAgenda} onToggleRealizado={handleToggleAgendaRealizado} onDeleteAgenda={handleDeleteAgenda} formatDate={formatDate} />
+            <Agenda
+              agenda={agenda} pessoas={pessoas} protocolos={protocolos}
+              onSaveAgenda={handleSaveAgenda} onToggleRealizado={handleToggleAgendaRealizado}
+              onDeleteAgenda={handleDeleteAgenda} formatDate={formatDate}
+            />
           )}
           {activeTab === 'Busca Global' && (
-            <BuscaGlobal pessoas={pessoas} protocolos={protocolos} documentos={documentos} documentosGerados={documentosGerados} tarefas={tarefas} agenda={agenda} onSelectPessoa={setSelectedPessoa} onSelectProtocolo={setSelectedProtocolo} onNavigate={handleNavigate} formatDate={formatDate} />
+            <BuscaGlobal
+              pessoas={pessoas} protocolos={protocolos} documentos={documentos}
+              documentosGerados={documentosGerados} tarefas={tarefas} agenda={agenda}
+              onSelectPessoa={setSelectedPessoa} onSelectProtocolo={setSelectedProtocolo}
+              onNavigate={handleNavigate} formatDate={formatDate}
+            />
           )}
           {activeTab === 'Configurações' && (
             <Configuracoes config={config} onSaveConfig={handleSaveConfig} />
