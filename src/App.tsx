@@ -13,6 +13,7 @@ import { Agenda } from './components/Agenda'
 import { BuscaGlobal } from './components/BuscaGlobal'
 import { Configuracoes } from './components/Configuracoes'
 import { MapaOcorrencias } from './components/MapaOcorrencias'
+import { SituacaoEmergencia } from './components/SituacaoEmergencia'
 import type {
   Pessoa,
   Protocolo,
@@ -456,6 +457,7 @@ const App: React.FC = () => {
             />
           )}
           {activeTab === 'Mapa de Ocorrências' && <MapaOcorrencias />}
+          {activeTab === 'Situação de Emergência' && <SituacaoEmergencia />}
           {activeTab === 'Pessoas / Dossiês' && (
             <Pessoas
               pessoas={pessoas} protocolos={protocolos} documentos={documentos}
