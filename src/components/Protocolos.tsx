@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, ArrowLeft, History, Send, Trash2, Search, Edit2, Phone, MapPin, CreditCard, CheckSquare, ExternalLink, X } from 'lucide-react'
 import type { Protocolo, Pessoa, Movimentacao, Tarefa, Encaminhamento } from '../types'
+import { supabase } from '../lib/supabase'
 
 interface ProtocolosProps {
   protocolos: Protocolo[]
@@ -94,9 +95,20 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
       .sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime())
   , [encaminhamentos, selectedProtocolo])
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    onSaveProtocolo(formData)
+    let dados = formData
+    // Protocolo NOVO e sem número digitado -> pega o proximo da fila central
+    // SOMENTE agora, na hora de salvar (cancelar nao consome numero).
+    if (!formData.id && !formData.numero.trim()) {
+      try {
+        const { data, error } = await supabase.rpc('proximo_protocolo')
+        if (!error && data) dados = { ...formData, numero: String(data) }
+      } catch (err) {
+        console.error('Erro ao gerar numero de protocolo:', err)
+      }
+    }
+    onSaveProtocolo(dados)
     setIsFormOpen(false)
   }
 
@@ -155,8 +167,8 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Número *</label>
-              <input required className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={formData.numero} onChange={e => setFormData({...formData, numero: e.target.value})} />
+              <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Número</label>
+              <input placeholder="Gerado automaticamente ao salvar" className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={formData.numero} onChange={e => setFormData({...formData, numero: e.target.value})} />
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Assunto *</label>
