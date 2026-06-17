@@ -12,6 +12,7 @@ import {
   LogOut,
   MapPin,
   AlertTriangle,
+  UserCog,
 } from 'lucide-react'
 
 interface MenuItem {
@@ -23,9 +24,10 @@ interface SidebarProps {
   activeTab: string
   onTabChange: (tab: string) => void
   onLogout: () => void
+  isAdmin?: boolean
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, onLogout }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, onLogout, isAdmin }) => {
   const menuItems: MenuItem[] = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { name: 'Mapa de Ocorrências', icon: <MapPin size={20} /> },
@@ -37,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, onLogo
     { name: 'Agenda', icon: <Calendar size={20} /> },
     { name: 'Tarefas', icon: <CheckSquare size={20} /> },
     { name: 'Busca Global', icon: <Search size={20} /> },
+    ...(isAdmin ? [{ name: 'Usuários', icon: <UserCog size={20} /> }] : []),
     { name: 'Configurações', icon: <Settings size={20} /> },
   ]
 

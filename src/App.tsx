@@ -14,6 +14,7 @@ import { BuscaGlobal } from './components/BuscaGlobal'
 import { Configuracoes } from './components/Configuracoes'
 import { MapaOcorrencias } from './components/MapaOcorrencias'
 import { SituacaoEmergencia } from './components/SituacaoEmergencia'
+import { Usuarios } from './components/Usuarios'
 import type {
   Pessoa,
   Protocolo,
@@ -32,6 +33,8 @@ const BUCKET = 'documentos'
 const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null)
   const [loadingAuth, setLoadingAuth] = useState(true)
+  const [isReadOnly, setIsReadOnly] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const [activeTab, setActiveTab] = useState('Dashboard')
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -75,6 +78,23 @@ const App: React.FC = () => {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  // Descobre o nível de acesso do usuário logado (tabela perfis)
+  useEffect(() => {
+    if (!session) { setIsReadOnly(false); setIsAdmin(false); return }
+    const email = (session.user.email || '').toLowerCase()
+    supabase.from('perfis').select('papel').eq('email', email).maybeSingle()
+      .then(async ({ data }) => {
+        if (data) {
+          setIsReadOnly(data.papel === 'leitura')
+          setIsAdmin(data.papel === 'admin')
+        } else {
+          await supabase.from('perfis').insert({ email, papel: 'leitura' })
+          setIsReadOnly(true)
+          setIsAdmin(false)
+        }
+      })
+  }, [session])
 
   const fetchData = useCallback(async () => {
     const { data: p } = await supabase.from('pessoas').select('*').order('nome')
@@ -231,7 +251,17 @@ const App: React.FC = () => {
   const handleNewTarefaFromPessoa = (pessoaId: number) => { setNewTarefaInit({ pessoa_id: pessoaId }); setActiveTab('Tarefas') }
   const handleNewTarefaFromProtocolo = (protocoloId: number, pessoaId: number) => { setNewTarefaInit({ protocolo_id: protocoloId, pessoa_id: pessoaId }); setActiveTab('Tarefas') }
 
+  // Bloqueia qualquer ação de escrita para perfil "somente leitura"
+  const bloqueadoSomenteLeitura = () => {
+    if (isReadOnly) {
+      alert('Seu acesso e somente leitura. Esta acao esta desabilitada.')
+      return true
+    }
+    return false
+  }
+
   const handleSavePessoa = async (pessoa: Pessoa) => {
+    if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
     if (pessoa.id) {
       await supabase.from('pessoas').update({ ...pessoa, atualizado_em: now }).eq('id', pessoa.id)
@@ -241,12 +271,14 @@ const App: React.FC = () => {
   }
 
   const handleDeletePessoa = async (id: number) => {
+    if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir esta pessoa e todo o seu dossiê?')) return
     await supabase.from('pessoas').delete().eq('id', id)
     setSelectedPessoa(null)
   }
 
   const handleImportDoc = async (pessoaId: number, file: File) => {
+    if (bloqueadoSomenteLeitura()) return
     const now = new Date()
     const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
     const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
@@ -261,6 +293,7 @@ const App: React.FC = () => {
   }
 
   const handleImportDocGlobal = async (file: File) => {
+    if (bloqueadoSomenteLeitura()) return
     const now = new Date()
     const dataRec = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
     const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'
@@ -280,6 +313,7 @@ const App: React.FC = () => {
   }
 
   const handleDeleteDocumento = async (id: number, caminho?: string) => {
+    if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Remover o registro deste documento?')) return
     if (caminho?.startsWith('http')) {
       try {
@@ -305,6 +339,7 @@ const App: React.FC = () => {
   }
 
   const handleSaveProtocolo = async (protocolo: Protocolo) => {
+    if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
     const { pessoa_nome, pessoa_endereco, pessoa_telefone, pessoa_cpf, criado_em, atualizado_em, id, ...data } = protocolo
     const historico = typeof data.historico === 'string' ? JSON.parse(data.historico || '[]') : data.historico
@@ -317,17 +352,20 @@ const App: React.FC = () => {
   }
 
   const handleDeleteProtocolo = async (id: number) => {
+    if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir este protocolo e seus vinculados?')) return
     await supabase.from('protocolos').delete().eq('id', id)
     setSelectedProtocolo(null)
   }
 
   const handleUpdateProtocoloStatus = async (id: number, newStatus: string) => {
+    if (bloqueadoSomenteLeitura()) return
     await supabase.from('protocolos').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
     if (selectedProtocolo?.id === id) setSelectedProtocolo(prev => prev ? { ...prev, status: newStatus as Protocolo['status'] } : null)
   }
 
   const handleAddMovimentacao = async (id: number, novaMovimentacao: string) => {
+    if (bloqueadoSomenteLeitura()) return
     const protocolo = protocolos.find(p => p.id === id)
     if (!protocolo || !novaMovimentacao.trim()) return
     const historico: Movimentacao[] = JSON.parse(protocolo.historico || '[]')
@@ -339,20 +377,24 @@ const App: React.FC = () => {
 
   // ── Encaminhamentos ──────────────────────────────────────────────
   const handleSaveEncaminhamento = async (enc: Encaminhamento) => {
+    if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
     await supabase.from('encaminhamentos').insert({ ...enc, criado_em: now })
   }
 
   const handleDeleteEncaminhamento = async (id: number) => {
+    if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir este encaminhamento?')) return
     await supabase.from('encaminhamentos').delete().eq('id', id)
   }
 
   const handleUpdateEncaminhamentoStatus = async (id: number, status: Encaminhamento['status']) => {
+    if (bloqueadoSomenteLeitura()) return
     await supabase.from('encaminhamentos').update({ status }).eq('id', id)
   }
 
   const handleSaveDocumentoGerado = async (documento: DocumentoGerado) => {
+    if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
     const { pessoa_nome, protocolo_numero, ...data } = documento
     if (documento.id) {
@@ -363,11 +405,13 @@ const App: React.FC = () => {
   }
 
   const handleDeleteDocumentoGerado = async (id: number) => {
+    if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir este documento gerado?')) return
     await supabase.from('documentos_gerados').delete().eq('id', id)
   }
 
   const handleSaveTarefa = async (tarefa: Tarefa) => {
+    if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
     const { pessoa_nome, protocolo_numero, ...data } = tarefa
     if (tarefa.id) {
@@ -378,16 +422,19 @@ const App: React.FC = () => {
   }
 
   const handleToggleTarefaStatus = async (id: number, currentStatus: string) => {
+    if (bloqueadoSomenteLeitura()) return
     const newStatus = currentStatus === 'concluida' ? 'pendente' : 'concluida'
     await supabase.from('tarefas').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
   }
 
   const handleDeleteTarefa = async (id: number) => {
+    if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir esta tarefa?')) return
     await supabase.from('tarefas').delete().eq('id', id)
   }
 
   const handleSaveAgenda = async (item: AgendaItem) => {
+    if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
     const payload = {
       titulo: item.titulo, descricao: item.descricao || '', data: item.data,
@@ -402,15 +449,18 @@ const App: React.FC = () => {
   }
 
   const handleToggleAgendaRealizado = async (id: number, currentRealizado: number) => {
+    if (bloqueadoSomenteLeitura()) return
     await supabase.from('agenda').update({ realizado: currentRealizado === 1 ? 0 : 1 }).eq('id', id)
   }
 
   const handleDeleteAgenda = async (id: number) => {
+    if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir este compromisso?')) return
     await supabase.from('agenda').delete().eq('id', id)
   }
 
   const handleSaveConfig = async (newConfig: Config) => {
+    if (bloqueadoSomenteLeitura()) return
     for (const [chave, valor] of Object.entries(newConfig)) {
       await supabase.from('configuracoes').upsert({ chave, valor }, { onConflict: 'chave' })
     }
@@ -438,8 +488,13 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden font-sans">
-      <Sidebar activeTab={activeTab} onTabChange={handleNavigate} onLogout={handleLogout} />
+      <Sidebar activeTab={activeTab} onTabChange={handleNavigate} onLogout={handleLogout} isAdmin={isAdmin} />
       <main className="flex-1 flex flex-col bg-main-bg overflow-hidden">
+        {isReadOnly && (
+          <div className="bg-deadline-alert/10 text-deadline-alert text-xs font-bold text-center py-1 shrink-0">
+            Modo somente leitura — visualização apenas
+          </div>
+        )}
         <Topbar
           activeTab={activeTab}
           selectedPessoaNome={selectedPessoa?.nome}
@@ -458,6 +513,7 @@ const App: React.FC = () => {
           )}
           {activeTab === 'Mapa de Ocorrências' && <MapaOcorrencias />}
           {activeTab === 'Situação de Emergência' && <SituacaoEmergencia />}
+          {activeTab === 'Usuários' && isAdmin && <Usuarios />}
           {activeTab === 'Pessoas / Dossiês' && (
             <Pessoas
               pessoas={pessoas} protocolos={protocolos} documentos={documentos}
