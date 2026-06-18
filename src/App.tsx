@@ -15,6 +15,7 @@ import { Configuracoes } from './components/Configuracoes'
 import { MapaOcorrencias } from './components/MapaOcorrencias'
 import { SituacaoEmergencia } from './components/SituacaoEmergencia'
 import { Usuarios } from './components/Usuarios'
+import { Alvaras } from './components/Alvaras'
 import type {
   Pessoa,
   Protocolo,
@@ -514,6 +515,7 @@ const App: React.FC = () => {
           {activeTab === 'Mapa de Ocorrências' && <MapaOcorrencias />}
           {activeTab === 'Situação de Emergência' && <SituacaoEmergencia />}
           {activeTab === 'Usuários' && isAdmin && <Usuarios />}
+              {activeTab === 'Alvarás' && <Alvaras />}
           {activeTab === 'Pessoas / Dossiês' && (
             <Pessoas
               pessoas={pessoas} protocolos={protocolos} documentos={documentos}
