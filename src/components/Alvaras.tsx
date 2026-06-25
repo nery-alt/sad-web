@@ -35,6 +35,7 @@ const VAZIO: Partial<Alvara> = {
   matricula_vistoriador: '0000',
 }
 
+const fmt = (v: any) => (v === null || v === undefined || v === '') ? '—' : String(v)
 const dataBR = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—'
 
 export const Alvaras: React.FC = () => {
@@ -48,6 +49,7 @@ export const Alvaras: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null)
   const [form, setForm] = useState<Partial<Alvara>>({ ...VAZIO })
   const [salvando, setSalvando] = useState(false)
+  const [verAlvara, setVerAlvara] = useState<Alvara | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [anexarId, setAnexarId] = useState<number | null>(null)
@@ -167,6 +169,39 @@ export const Alvaras: React.FC = () => {
     setTimeout(() => w.print(), 500)
   }
 
+  const imprimirUm = (a: Alvara) => {
+    const hoje = new Date().toLocaleDateString('pt-BR')
+    const cor = a.situacao_imovel === 'Liberado' ? '#166534' : a.situacao_imovel === 'Não liberado' ? '#991b1b' : '#92400e'
+    const linha = (lbl: string, val: any) => (val === null || val === undefined || val === '') ? '' : `<div class="row"><span class="lbl">${lbl}</span><span class="val">${val}</span></div>`
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Alvará ${a.numero || ''}</title>
+      <style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px;color:#111}h2{font-size:16px;margin:0}h3{font-size:12px;font-weight:normal;color:#555;margin:2px 0 14px}.nome{font-size:15px;font-weight:bold;margin:10px 0 4px}.sit{font-weight:bold}.row{display:flex;justify-content:space-between;gap:16px;padding:5px 0;border-bottom:1px solid #eee}.lbl{color:#555}.val{text-align:right;font-weight:500}.bloco{margin-top:14px;line-height:1.5}.bloco b{display:block;color:#555;font-size:11px;text-transform:uppercase;margin-bottom:3px}.ass{margin-top:50px;text-align:center}.ass div{display:inline-block;border-top:1px solid #000;padding-top:4px;min-width:60%}@media print{body{margin:12px}}</style>
+      </head><body>
+      <h2>PREFEITURA MUNICIPAL DE TEFÉ — SEMDECP</h2>
+      <h3>Secretaria Municipal de Defesa Civil e Patrimonial</h3>
+      <div class="nome">${a.nome_estabelecimento}</div>
+      <div class="row"><span class="lbl">Protocolo</span><span class="val">${a.numero || '—'}</span></div>
+      <div class="row"><span class="lbl">Situação</span><span class="val sit" style="color:${cor}">${a.situacao_imovel || '—'}</span></div>
+      ${linha('CNPJ', a.cnpj)}
+      ${linha('Tipo de Estabelecimento', a.tipo_estabelecimento)}
+      ${linha('Responsável', a.nome_responsavel)}
+      ${linha('CPF do Responsável', a.cpf_responsavel)}
+      ${linha('Telefone', a.telefone)}
+      ${linha('Endereço', [a.endereco, a.bairro, a.municipio].filter(Boolean).join(', '))}
+      ${linha('Área Total (m²)', a.area_total)}
+      ${linha('Capacidade (pessoas)', a.capacidade_pessoas)}
+      ${linha('Data da Vistoria', dataBR(a.data_vistoria))}
+      ${linha('Vistoriador', a.nome_vistoriador)}
+      ${a.descricao_tecnica ? `<div class="bloco"><b>Descrição Técnica</b>${a.descricao_tecnica}</div>` : ''}
+      ${a.observacoes ? `<div class="bloco"><b>Observações</b>${a.observacoes}</div>` : ''}
+      <div class="ass"><div>${a.nome_vistoriador || 'Rêumano Nery da Silva'}<br>Chefe do Setor de Vistoria</div></div>
+      <p style="font-size:10px;color:#888;margin-top:30px">Emitido em ${hoje}</p>
+      </body></html>`
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(html); w.document.close(); w.focus()
+    setTimeout(() => w.print(), 500)
+  }
+
   const badge = (s: string | null) => {
     if (s === 'Liberado') return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-success/10 text-success">LIBERADO</span>
     if (s === 'Não liberado') return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-error-expired/10 text-error-expired">NÃO LIBERADO</span>
@@ -235,7 +270,7 @@ export const Alvaras: React.FC = () => {
                 <span className="text-xs text-text-secondary font-mono">{a.numero || 'S/N'}</span>
                 {badge(a.situacao_imovel)}
               </div>
-              <p className="font-bold text-sm mt-0.5 truncate">{a.nome_estabelecimento}</p>
+              <p onClick={() => setVerAlvara(a)} className="font-bold text-sm mt-0.5 truncate cursor-pointer hover:text-primary-btn hover:underline">{a.nome_estabelecimento}</p>
               <p className="text-xs text-text-secondary truncate">
                 {[a.nome_responsavel, a.telefone, a.bairro, dataBR(a.data_vistoria)].filter(x => x && x !== '—').join(' · ')}
               </p>
@@ -262,6 +297,62 @@ export const Alvaras: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Modal visualizar (só leitura) */}
+      {verAlvara && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-secondary font-mono">{verAlvara.numero || 'S/N'}</span>
+                  {badge(verAlvara.situacao_imovel)}
+                </div>
+                <h2 className="text-lg font-bold truncate">{verAlvara.nome_estabelecimento}</h2>
+              </div>
+              <button onClick={() => setVerAlvara(null)} className="p-1 hover:bg-gray-100 rounded"><X size={20} /></button>
+            </div>
+            <div className="overflow-y-auto p-4 text-sm">
+              {([
+                ['CNPJ', verAlvara.cnpj],
+                ['Tipo de Estabelecimento', verAlvara.tipo_estabelecimento],
+                ['Responsável', verAlvara.nome_responsavel],
+                ['CPF do Responsável', verAlvara.cpf_responsavel],
+                ['Telefone', verAlvara.telefone],
+                ['Endereço', verAlvara.endereco],
+                ['Bairro', verAlvara.bairro],
+                ['Município/UF', verAlvara.municipio],
+                ['Área Total (m²)', verAlvara.area_total],
+                ['Capacidade (pessoas)', verAlvara.capacidade_pessoas],
+                ['Situação', verAlvara.situacao_imovel],
+                ['Data da Vistoria', dataBR(verAlvara.data_vistoria)],
+                ['Vistoriador', verAlvara.nome_vistoriador],
+                ['Matrícula', verAlvara.matricula_vistoriador],
+              ] as [string, any][]).map(([label, val]) => (
+                <div key={label} className="flex justify-between gap-4 py-1.5 border-b border-gray-100">
+                  <span className="text-text-secondary">{label}</span>
+                  <span className="text-right font-medium">{fmt(val)}</span>
+                </div>
+              ))}
+              {verAlvara.descricao_tecnica && (
+                <div className="mt-3"><p className="text-text-secondary text-xs font-bold uppercase mb-1">Descrição Técnica</p><p className="whitespace-pre-wrap">{verAlvara.descricao_tecnica}</p></div>
+              )}
+              {verAlvara.observacoes && (
+                <div className="mt-3"><p className="text-text-secondary text-xs font-bold uppercase mb-1">Observações</p><p className="whitespace-pre-wrap">{verAlvara.observacoes}</p></div>
+              )}
+            </div>
+            <div className="p-4 border-t flex flex-wrap justify-end gap-2">
+              {verAlvara.relatorio_url ? (
+                <a href={verAlvara.relatorio_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-success/40 text-success hover:bg-success/5"><FileText size={15} /> Relatório</a>
+              ) : (
+                <button onClick={() => pedirAnexo(verAlvara.id)} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-gray-200 text-text-secondary hover:bg-gray-50"><Paperclip size={15} /> Anexar relatório</button>
+              )}
+              <button onClick={() => imprimirUm(verAlvara)} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-gray-300 text-text-secondary hover:bg-gray-50"><Printer size={15} /> Imprimir este</button>
+              <button onClick={() => { const a = verAlvara; setVerAlvara(null); abrirEdicao(a) }} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm bg-primary-btn text-white font-bold hover:opacity-90"><Pencil size={15} /> Editar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal novo/editar */}
       {showForm && (
