@@ -35,7 +35,6 @@ const VAZIO: Partial<Alvara> = {
   matricula_vistoriador: '0000',
 }
 
-const fmt = (v: any) => (v === null || v === undefined || v === '') ? '—' : String(v)
 const dataBR = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—'
 
 export const Alvaras: React.FC = () => {
@@ -146,41 +145,26 @@ export const Alvaras: React.FC = () => {
   const imprimirSelecionados = () => {
     const lista = alvaras.filter(a => selecionados.has(a.id))
     if (lista.length === 0) return
-    const linhas = lista.map(a => `
-      <tr>
-        <td>${fmt(a.numero)}</td>
-        <td>${fmt(a.nome_estabelecimento)}</td>
-        <td>${fmt(a.nome_responsavel)}</td>
-        <td>${fmt(a.telefone)}</td>
-        <td>${fmt(a.endereco)}${a.bairro ? ' — ' + a.bairro : ''}</td>
-        <td style="font-weight:bold;color:${a.situacao_imovel === 'Liberado' ? '#166534' : a.situacao_imovel === 'Não liberado' ? '#991b1b' : '#92400e'}">${fmt(a.situacao_imovel)}</td>
-        <td>${dataBR(a.data_vistoria)}</td>
-      </tr>`).join('')
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relação de Alvarás — SEMDECP</title>
-    <style>
-      body{font-family:Arial,sans-serif;font-size:11px;margin:24px;color:#111}
-      h2{font-size:14px;margin:0}h3{font-size:12px;margin:4px 0 16px;font-weight:normal}
-      table{width:100%;border-collapse:collapse}
-      th,td{border:1px solid #bbb;padding:5px 7px;text-align:left;vertical-align:top}
-      th{background:#eee}
-      .rod{margin-top:46px;font-size:10px;color:#444}
-      .ass{margin-top:40px;display:flex;justify-content:space-around;text-align:center}
-      .ass div{border-top:1px solid #000;padding-top:4px;width:42%}
-    </style></head><body>
-    <h2>PREFEITURA MUNICIPAL DE TEFÉ — SEMDECP</h2>
-    <h3>Secretaria Municipal de Defesa Civil e Patrimonial<br>Relação de Estabelecimentos Vistoriados</h3>
-    <table><thead><tr>
-      <th>Protocolo</th><th>Estabelecimento</th><th>Responsável</th><th>Telefone</th>
-      <th>Endereço / Bairro</th><th>Situação</th><th>Data</th>
-    </tr></thead><tbody>${linhas}</tbody></table>
-    <p class="rod">Total: ${lista.length} estabelecimento(s) · Emitido em ${new Date().toLocaleDateString('pt-BR')}</p>
-    <div class="ass">
-      <div>Rêumano Nery da Silva<br>Chefe do Setor de Vistoria</div>
-      <div>Edivilson Braga da Silva<br>Secretário Municipal de Defesa Civil</div>
-    </div>
-    </body></html>`
+    const hoje = new Date().toLocaleDateString('pt-BR')
+    const cor = (s: string | null) => s === 'Liberado' ? '#166534' : s === 'Não liberado' ? '#991b1b' : '#92400e'
+    const cards = lista.map((a, i) => {
+      const end = [a.endereco, a.bairro, a.municipio].filter(Boolean).join(', ')
+      return `<div class="card"><div class="numero">${i + 1}</div><div class="info">
+        <div class="nome">${a.nome_estabelecimento}</div>
+        <div class="detalhe"><b>Protocolo:</b> ${a.numero || '—'} &nbsp;|&nbsp; <b>Situação:</b> <span class="sit" style="color:${cor(a.situacao_imovel)}">${a.situacao_imovel || '—'}</span></div>
+        ${a.nome_responsavel ? `<div class="detalhe"><b>Responsável:</b> ${a.nome_responsavel}</div>` : ''}
+        ${a.telefone ? `<div class="detalhe"><b>Telefone:</b> ${a.telefone}</div>` : ''}
+        ${end ? `<div class="detalhe endereco"><b>Endereço:</b> ${end}</div>` : ''}
+        ${a.data_vistoria ? `<div class="detalhe"><b>Data da vistoria:</b> ${dataBR(a.data_vistoria)}</div>` : ''}
+      </div></div>`
+    }).join('')
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relação de Alvarás</title>
+      <style>body{font-family:Arial,sans-serif;font-size:12px;margin:20px;color:#111}h2{font-size:16px;margin-bottom:4px}.data{font-size:11px;color:#555;margin-bottom:16px}.card{display:flex;gap:12px;border:1px solid #ccc;border-radius:6px;padding:10px 14px;margin-bottom:10px;page-break-inside:avoid}.numero{font-size:20px;font-weight:bold;color:#aaa;min-width:24px;padding-top:2px}.info{flex:1}.nome{font-size:14px;font-weight:bold;margin-bottom:4px}.detalhe{margin-top:2px;line-height:1.5}.endereco{font-size:13px;color:#1a56db}.sit{font-weight:bold}@media print{body{margin:10px}}</style>
+      </head><body><h2>Relação de Estabelecimentos Vistoriados — SEMDECP</h2><div class="data">Gerado em: ${hoje} | Total: ${lista.length} estabelecimento(s)</div>${cards}</body></html>`
     const w = window.open('', '_blank')
-    if (w) { w.document.write(html); w.document.close(); w.print() }
+    if (!w) return
+    w.document.write(html); w.document.close(); w.focus()
+    setTimeout(() => w.print(), 500)
   }
 
   const badge = (s: string | null) => {
