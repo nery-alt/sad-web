@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   UserCog,
   FileCheck,
+  Home,
 } from 'lucide-react'
 
 interface MenuItem {
@@ -34,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, onLogo
     { name: 'Mapa de Ocorrências', icon: <MapPin size={20} /> },
     { name: 'Situação de Emergência', icon: <AlertTriangle size={20} /> },
     { name: 'Alvarás', icon: <FileCheck size={20} /> },
+    { name: 'Comunidades', icon: <Home size={20} /> },
     { name: 'Pessoas / Dossiês', icon: <Users size={20} /> },
     { name: 'Protocolos', icon: <FileText size={20} /> },
     { name: 'Documentos Recebidos', icon: <Inbox size={20} /> },
