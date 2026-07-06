@@ -28,6 +28,14 @@ interface Alvara {
   criado_em: string
 }
 
+interface Anexo {
+  id: number
+  alvara_id: number
+  nome: string
+  url: string
+  criado_em: string
+}
+
 const VAZIO: Partial<Alvara> = {
   municipio: 'Tefé/AM',
   situacao_imovel: 'Em análise',
@@ -54,11 +62,14 @@ export const Alvaras: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [anexarId, setAnexarId] = useState<number | null>(null)
   const [uploadingId, setUploadingId] = useState<number | null>(null)
+  const [anexos, setAnexos] = useState<Anexo[]>([])
 
   const carregar = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('alvaras').select('*').order('criado_em', { ascending: false })
     if (data) setAlvaras(data as Alvara[])
+    const { data: anx } = await supabase.from('alvara_anexos').select('*').order('criado_em', { ascending: true })
+    if (anx) setAnexos(anx as Anexo[])
     setLoading(false)
   }, [])
 
@@ -124,7 +135,7 @@ export const Alvaras: React.FC = () => {
       const { error: upErr } = await supabase.storage.from('documentos').upload(path, file, { upsert: true })
       if (upErr) throw upErr
       const { data: pub } = supabase.storage.from('documentos').getPublicUrl(path)
-      await supabase.from('alvaras').update({ relatorio_url: pub.publicUrl }).eq('id', anexarId)
+      await supabase.from('alvara_anexos').insert({ alvara_id: anexarId, nome: file.name, url: pub.publicUrl })
       carregar()
     } catch (err: any) {
       alert('Não foi possível anexar: ' + (err?.message || err))
@@ -132,6 +143,13 @@ export const Alvaras: React.FC = () => {
       setUploadingId(null)
       setAnexarId(null)
     }
+  }
+
+  const anexosDe = (id: number) => anexos.filter(x => x.alvara_id === id)
+  const removerAnexo = async (anexo: Anexo) => {
+    if (!window.confirm(`Remover \"${anexo.nome}\"?`)) return
+    await supabase.from('alvara_anexos').delete().eq('id', anexo.id)
+    carregar()
   }
 
   // ---------- Seleção / impressão ----------
@@ -276,17 +294,16 @@ export const Alvaras: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {a.relatorio_url ? (
-                <a href={a.relatorio_url} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-success/40 text-success hover:bg-success/5" title="Abrir relatório">
-                  <FileText size={13} /> Relatório
-                </a>
-              ) : (
-                <button onClick={() => pedirAnexo(a.id)} disabled={uploadingId === a.id}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-gray-200 text-text-secondary hover:bg-gray-50">
-                  <Paperclip size={13} /> {uploadingId === a.id ? 'Enviando…' : 'Anexar'}
+              {anexosDe(a.id).length > 0 && (
+                <button onClick={() => setVerAlvara(a)} title="Ver anexos"
+                  className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-success/40 text-success hover:bg-success/5">
+                  <FileText size={13} /> {anexosDe(a.id).length}
                 </button>
               )}
+              <button onClick={() => pedirAnexo(a.id)} disabled={uploadingId === a.id}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-gray-200 text-text-secondary hover:bg-gray-50">
+                <Paperclip size={13} /> {uploadingId === a.id ? 'Enviando…' : 'Anexar'}
+              </button>
               {a.documento_url && (
                 <a href={a.documento_url} target="_blank" rel="noopener noreferrer"
                   className="px-2 py-1 rounded text-xs border border-gray-200 text-text-secondary hover:bg-gray-50">PDF v2</a>
@@ -341,12 +358,27 @@ export const Alvaras: React.FC = () => {
                 <div className="mt-3"><p className="text-text-secondary text-xs font-bold uppercase mb-1">Observações</p><p className="whitespace-pre-wrap">{verAlvara.observacoes}</p></div>
               )}
             </div>
-            <div className="p-4 border-t flex flex-wrap justify-end gap-2">
-              {verAlvara.relatorio_url ? (
-                <a href={verAlvara.relatorio_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-success/40 text-success hover:bg-success/5"><FileText size={15} /> Relatório</a>
-              ) : (
-                <button onClick={() => pedirAnexo(verAlvara.id)} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-gray-200 text-text-secondary hover:bg-gray-50"><Paperclip size={15} /> Anexar relatório</button>
+            <div className="px-4 pb-2">
+              <p className="text-text-secondary text-xs font-bold uppercase mb-2">Documentos anexados ({anexosDe(verAlvara.id).length})</p>
+              {anexosDe(verAlvara.id).length === 0 && (
+                <p className="text-text-secondary text-xs italic mb-2">Nenhum documento anexado ainda.</p>
               )}
+              {anexosDe(verAlvara.id).map(anx => (
+                <div key={anx.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-gray-100">
+                  <a href={anx.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary-btn hover:underline truncate">
+                    <FileText size={14} className="shrink-0" /> <span className="truncate">{anx.nome}</span>
+                  </a>
+                  <button onClick={() => removerAnexo(anx)} className="p-1 rounded hover:bg-error-expired/10 text-error-expired shrink-0" title="Remover"><Trash2 size={14} /></button>
+                </div>
+              ))}
+              {verAlvara.documento_url && (
+                <div className="flex items-center gap-2 py-1.5 border-b border-gray-100">
+                  <a href={verAlvara.documento_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-primary-btn hover:underline"><FileText size={14} /> PDF do Sentinela (v2)</a>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t flex flex-wrap justify-end gap-2">
+              <button onClick={() => pedirAnexo(verAlvara.id)} disabled={uploadingId === verAlvara.id} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-gray-200 text-text-secondary hover:bg-gray-50"><Paperclip size={15} /> {uploadingId === verAlvara.id ? 'Enviando…' : 'Adicionar anexo'}</button>
               <button onClick={() => imprimirUm(verAlvara)} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-gray-300 text-text-secondary hover:bg-gray-50"><Printer size={15} /> Imprimir este</button>
               <button onClick={() => { const a = verAlvara; setVerAlvara(null); abrirEdicao(a) }} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm bg-primary-btn text-white font-bold hover:opacity-90"><Pencil size={15} /> Editar</button>
             </div>
