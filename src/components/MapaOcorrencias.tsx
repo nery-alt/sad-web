@@ -25,6 +25,20 @@ type Ocorrencia = {
   situacao_imovel: string | null
 }
 
+type Foco = {
+  lat: number
+  lon: number
+  data_hora: string
+  satelite: string
+  municipio: string
+  estado: string
+  dias_sem_chuva: number | null
+  precipitacao: number | null
+  risco_fogo: number | null
+  frp: number | null
+  bioma: string
+}
+
 // Centro de Tefé — usado como fallback quando não há pontos
 const TEFE: [number, number] = [-3.3548, -64.7110]
 
@@ -39,6 +53,14 @@ const RISK_RANK: Record<string, number> = {
   'Muito Alto': 4, 'Alto': 3, 'Médio': 2, 'Medio': 2, 'Baixo': 1,
 }
 const corDoRisco = (nivel: string | null) => (nivel && RISK_COLORS[nivel]) || '#6b7280'
+
+// Cor do foco de calor pelo risco de fogo (0..1) do INPE
+const corDoFoco = (risco: number | null): string => {
+  if (risco == null) return '#ef4444'
+  if (risco >= 0.7) return '#b91c1c'
+  if (risco >= 0.4) return '#ea580c'
+  return '#f59e0b'
+}
 
 const esc = (s: any) =>
   String(s ?? '')
@@ -60,6 +82,13 @@ export const MapaOcorrencias: React.FC = () => {
   const mapDivRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const clusterRef = useRef<any>(null)
+  const focosLayerRef = useRef<any>(null)
+
+  const [focos, setFocos] = useState<Foco[]>([])
+  const [mostrarFocos, setMostrarFocos] = useState(false)
+  const [focosLoading, setFocosLoading] = useState(false)
+  const [focosInfo, setFocosInfo] = useState<{ total: number; atualizado_em: string } | null>(null)
+  const [focosErro, setFocosErro] = useState<string | null>(null)
 
   const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([])
   const [loading, setLoading] = useState(true)
@@ -174,6 +203,70 @@ export const MapaOcorrencias: React.FC = () => {
     }
   }, [ocorrencias, filtroTipo])
 
+  // Busca os focos de calor do INPE (via Edge Function) ao ligar a camada
+  async function carregarFocos() {
+    setFocosLoading(true)
+    setFocosErro(null)
+    try {
+      const { data, error } = await supabase.functions.invoke('focos-inpe')
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      setFocos((data?.focos as Foco[]) || [])
+      setFocosInfo({ total: data?.total ?? 0, atualizado_em: data?.atualizado_em ?? '' })
+    } catch (e: any) {
+      setFocosErro(e?.message || 'Falha ao buscar focos do INPE')
+      setFocos([])
+    } finally {
+      setFocosLoading(false)
+    }
+  }
+
+  // Liga/desliga a camada de focos
+  useEffect(() => {
+    if (mostrarFocos && focos.length === 0 && !focosLoading && !focosInfo) {
+      carregarFocos()
+    }
+  }, [mostrarFocos])
+
+  // (Re)desenha os focos no mapa
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (focosLayerRef.current) {
+      map.removeLayer(focosLayerRef.current)
+      focosLayerRef.current = null
+    }
+    if (!mostrarFocos || focos.length === 0) return
+
+    const grupo = L.layerGroup()
+    for (const f of focos) {
+      const cor = corDoFoco(f.risco_fogo)
+      const circ = L.circleMarker([f.lat, f.lon], {
+        radius: 9, color: cor, weight: 1, fillColor: cor, fillOpacity: 0.4,
+      })
+      const linha = (rot: string, val: any) =>
+        (val === null || val === undefined || val === '') ? '' :
+        `<div style="font-size:12px;"><b>${rot}:</b> ${esc(val)}</div>`
+      const dh = f.data_hora ? esc(f.data_hora.replace('T', ' ').slice(0, 16)) + ' GMT' : '—'
+      const html = `<div style="min-width:200px;font-family:sans-serif;">
+        <div style="font-weight:700;color:${cor};margin-bottom:3px;">🔥 Foco de calor — INPE</div>
+        <div style="font-size:12px;"><b>Local:</b> ${esc(f.municipio || '—')}${f.estado ? '/' + esc(f.estado) : ''}</div>
+        <div style="font-size:12px;"><b>Detecção:</b> ${dh}</div>
+        ${linha('Satélite', f.satelite)}
+        ${linha('Risco de fogo', f.risco_fogo != null ? (f.risco_fogo * 100).toFixed(0) + '%' : '')}
+        ${linha('FRP (potência)', f.frp != null ? f.frp + ' MW' : '')}
+        ${linha('Dias sem chuva', f.dias_sem_chuva)}
+        ${linha('Precipitação', f.precipitacao != null ? f.precipitacao + ' mm' : '')}
+        ${linha('Bioma', f.bioma)}
+        <div style="font-size:10px;color:#999;margin-top:4px;">Coord: ${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</div>
+      </div>`
+      circ.bindPopup(html)
+      grupo.addLayer(circ)
+    }
+    grupo.addTo(map)
+    focosLayerRef.current = grupo
+  }, [mostrarFocos, focos])
+
   const tipos = Array.from(
     new Set(ocorrencias.map(o => o.tipificacao).filter(Boolean))
   ) as string[]
@@ -198,6 +291,19 @@ export const MapaOcorrencias: React.FC = () => {
             {tipos.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
+        <button
+          onClick={() => setMostrarFocos(v => !v)}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm font-bold border ${mostrarFocos ? 'bg-error-expired text-white border-error-expired' : 'bg-white text-error-expired border-error-expired/40'}`}
+          title="Focos de calor detectados por satélite (INPE)"
+        >
+          🔥 Focos INPE{focosInfo ? ` (${focosInfo.total})` : ''}
+        </button>
+        {mostrarFocos && (
+          <button onClick={carregarFocos} disabled={focosLoading}
+            className="text-xs text-text-secondary underline disabled:opacity-50">
+            {focosLoading ? 'atualizando…' : 'atualizar'}
+          </button>
+        )}
         <div className="flex items-center gap-3 w-full text-xs text-text-secondary">
           <Legenda cor="#dc2626" label="Muito Alto" />
           <Legenda cor="#ea580c" label="Alto" />
@@ -205,6 +311,15 @@ export const MapaOcorrencias: React.FC = () => {
           <Legenda cor="#16a34a" label="Baixo" />
           <Legenda cor="#6b7280" label="N/D" />
         </div>
+        {mostrarFocos && (
+          <div className="w-full text-xs text-text-secondary">
+            {focosLoading && <span>Buscando focos do INPE…</span>}
+            {focosErro && <span className="text-error-expired">Focos INPE: {focosErro}</span>}
+            {!focosLoading && !focosErro && focosInfo && (
+              <span>🔥 {focosInfo.total} foco(s) de calor na região (satélite INPE, últimas ~48h)</span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 relative">
