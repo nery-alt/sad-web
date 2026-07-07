@@ -39,6 +39,19 @@ type Foco = {
   bioma: string
 }
 
+type Comunidade = {
+  id: number
+  nome: string
+  gps_lat: number | null
+  gps_lng: number | null
+  distancia: string | null
+  duracao_viagem: string | null
+  qtd_pessoas: number | null
+  qtd_familias: number | null
+  presidente_nome: string | null
+  presidente_telefone: string | null
+}
+
 // Centro de Tefé — usado como fallback quando não há pontos
 const TEFE: [number, number] = [-3.3548, -64.7110]
 
@@ -89,6 +102,9 @@ export const MapaOcorrencias: React.FC = () => {
   const [focosLoading, setFocosLoading] = useState(false)
   const [focosInfo, setFocosInfo] = useState<{ total: number; atualizado_em: string } | null>(null)
   const [focosErro, setFocosErro] = useState<string | null>(null)
+  const comunidadesLayerRef = useRef<any>(null)
+  const [comunidades, setComunidades] = useState<Comunidade[]>([])
+  const [mostrarComunidades, setMostrarComunidades] = useState(false)
 
   const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([])
   const [loading, setLoading] = useState(true)
@@ -105,6 +121,16 @@ export const MapaOcorrencias: React.FC = () => {
       if (error) { setErro(error.message); setLoading(false); return }
       setOcorrencias((data as Ocorrencia[]) || [])
       setLoading(false)
+    })()
+  }, [])
+
+  // Carrega as comunidades (para a camada do mapa)
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('comunidades')
+        .select('id, nome, gps_lat, gps_lng, distancia, duracao_viagem, qtd_pessoas, qtd_familias, presidente_nome, presidente_telefone')
+      setComunidades((data as Comunidade[]) || [])
     })()
   }, [])
 
@@ -267,6 +293,52 @@ export const MapaOcorrencias: React.FC = () => {
     focosLayerRef.current = grupo
   }, [mostrarFocos, focos])
 
+  // (Re)desenha as comunidades (pinos azuis com casinha)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (comunidadesLayerRef.current) {
+      map.removeLayer(comunidadesLayerRef.current)
+      comunidadesLayerRef.current = null
+    }
+    if (!mostrarComunidades) return
+
+    const comCoord = comunidades.filter(c => c.gps_lat != null && c.gps_lng != null)
+    if (comCoord.length === 0) return
+
+    const grupo = L.layerGroup()
+    for (const c of comCoord) {
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#2563eb;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(45deg);color:#fff;font-size:14px;">🏠</span></div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 30],
+        popupAnchor: [0, -30],
+      })
+      const linha = (rot: string, val: any) =>
+        (val === null || val === undefined || val === '') ? '' :
+        `<div style="font-size:12px;"><b>${rot}:</b> ${esc(val)}</div>`
+      const pessoas = [
+        c.qtd_pessoas != null ? `${c.qtd_pessoas} pessoas` : '',
+        c.qtd_familias != null ? `${c.qtd_familias} famílias` : '',
+      ].filter(Boolean).join(' · ')
+      const html = `<div style="min-width:210px;font-family:sans-serif;">
+        <div style="font-weight:700;color:#2563eb;margin-bottom:3px;">🏠 ${esc(c.nome)}</div>
+        ${linha('Presidente', c.presidente_nome)}
+        ${linha('Telefone', c.presidente_telefone)}
+        ${pessoas ? `<div style="font-size:12px;"><b>População:</b> ${esc(pessoas)}</div>` : ''}
+        ${linha('Distância', c.distancia)}
+        ${linha('Duração da viagem', c.duracao_viagem)}
+        <div style="font-size:10px;color:#999;margin-top:4px;">Coord: ${c.gps_lat!.toFixed(4)}, ${c.gps_lng!.toFixed(4)}</div>
+      </div>`
+      const marker = L.marker([c.gps_lat!, c.gps_lng!], { icon })
+      marker.bindPopup(html)
+      grupo.addLayer(marker)
+    }
+    grupo.addTo(map)
+    comunidadesLayerRef.current = grupo
+  }, [mostrarComunidades, comunidades])
+
   const tipos = Array.from(
     new Set(ocorrencias.map(o => o.tipificacao).filter(Boolean))
   ) as string[]
@@ -304,6 +376,14 @@ export const MapaOcorrencias: React.FC = () => {
             {focosLoading ? 'atualizando…' : 'atualizar'}
           </button>
         )}
+        <button
+          onClick={() => setMostrarComunidades(v => !v)}
+          className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm font-bold border ${mostrarComunidades ? 'text-white border-blue-600' : 'bg-white border-blue-600/40'}`}
+          style={mostrarComunidades ? { backgroundColor: '#2563eb' } : { color: '#2563eb' }}
+          title="Comunidades cadastradas"
+        >
+          🏠 Comunidades{comunidades.filter(c => c.gps_lat != null && c.gps_lng != null).length > 0 ? ` (${comunidades.filter(c => c.gps_lat != null && c.gps_lng != null).length})` : ''}
+        </button>
         <div className="flex items-center gap-3 w-full text-xs text-text-secondary">
           <Legenda cor="#dc2626" label="Muito Alto" />
           <Legenda cor="#ea580c" label="Alto" />
