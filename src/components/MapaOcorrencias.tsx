@@ -237,8 +237,20 @@ export const MapaOcorrencias: React.FC = () => {
       const { data, error } = await supabase.functions.invoke('focos-inpe')
       if (error) throw error
       if (data?.error) throw new Error(data.error)
-      setFocos((data?.focos as Foco[]) || [])
+      const lista = (data?.focos as Foco[]) || []
+      setFocos(lista)
       setFocosInfo({ total: data?.total ?? 0, atualizado_em: data?.atualizado_em ?? '' })
+      // Grava no histórico (ignora duplicados pela chave) para os gráficos
+      if (lista.length > 0) {
+        const rows = lista.map(f => ({
+          chave: `${f.lat.toFixed(5)},${f.lon.toFixed(5)},${f.data_hora}`,
+          lat: f.lat, lon: f.lon, data_hora: f.data_hora,
+          data_foco: (f.data_hora || '').slice(0, 10) || null,
+          satelite: f.satelite, municipio: f.municipio, estado: f.estado,
+          risco_fogo: f.risco_fogo, frp: f.frp, bioma: f.bioma,
+        }))
+        supabase.from('focos_historico').upsert(rows, { onConflict: 'chave', ignoreDuplicates: true }).then(() => {})
+      }
     } catch (e: any) {
       setFocosErro(e?.message || 'Falha ao buscar focos do INPE')
       setFocos([])
