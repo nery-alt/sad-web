@@ -18,6 +18,7 @@ import { Usuarios } from './components/Usuarios'
 import { Alvaras } from './components/Alvaras'
 import { Comunidades } from './components/Comunidades'
 import { GraficoFocos } from './components/GraficoFocos'
+import { NivelDosRios } from './components/nivel-dos-rios'
 import type {
   Pessoa,
   Protocolo,
@@ -520,6 +521,7 @@ const App: React.FC = () => {
               {activeTab === 'Alvarás' && <Alvaras />}
           {activeTab === 'Comunidades' && <Comunidades />}
           {activeTab === 'Focos de Calor' && <GraficoFocos />}
+          {activeTab === 'Nível dos Rios' && <NivelDosRios />}
           {activeTab === 'Pessoas / Dossiês' && (
             <Pessoas
               pessoas={pessoas} protocolos={protocolos} documentos={documentos}

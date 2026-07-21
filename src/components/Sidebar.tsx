@@ -16,6 +16,7 @@ import {
   FileCheck,
   Home,
   Flame,
+  Waves,
 } from 'lucide-react'
 
 interface MenuItem {
@@ -38,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, onLogo
     { name: 'Alvarás', icon: <FileCheck size={20} /> },
     { name: 'Comunidades', icon: <Home size={20} /> },
     { name: 'Focos de Calor', icon: <Flame size={20} /> },
+    { name: 'Nível dos Rios', icon: <Waves size={20} /> },
     { name: 'Pessoas / Dossiês', icon: <Users size={20} /> },
     { name: 'Protocolos', icon: <FileText size={20} /> },
     { name: 'Documentos Recebidos', icon: <Inbox size={20} /> },
