@@ -3,6 +3,7 @@ export type FonteChuva = 'manual' | 'ana' | 'inmet'
 export type FonteUmidade = 'manual' | 'inmet'
 export type Tendencia = 'estiagem' | 'vazante' | 'estavel' | 'enchendo' | 'cheia'
 export type Situacao = 'normal' | 'atencao' | 'alerta' | 'emergencia'
+export type SentidoAlerta = 'cheia' | 'seca'
 
 export interface Estacao {
   id: string
@@ -15,6 +16,7 @@ export interface Estacao {
   cota_atencao_cm: number | null
   cota_alerta_cm: number | null
   cota_emergencia_cm: number | null
+  sentido_alerta: SentidoAlerta
   ativa: boolean
   created_at: string
 }
@@ -76,12 +78,23 @@ export const SITUACAO_COR: Record<Situacao, { bg: string; text: string; hex: str
   emergencia: { bg: 'bg-error-expired/10', text: 'text-error-expired', hex: '#DC2626' },
 }
 
+export const SENTIDO_LABEL: Record<SentidoAlerta, string> = {
+  cheia: 'Cheia (enchente — pior quando SOBE)',
+  seca: 'Seca (estiagem — pior quando BAIXA)',
+}
+
 // Calcula a situação (normal/atenção/alerta/emergência) a partir dos limiares da estação.
-// Mesma regra usada na view v_registros_nivel_situacao — mantida em JS para casos onde
-// o dado ainda não passou pela view (ex.: pré-visualização em formulário).
+// Mesma regra usada na view v_registros_nivel_situacao — respeita o sentido do alerta:
+// 'cheia' agrava quando a cota sobe; 'seca' agrava quando a cota baixa.
 export function calcularSituacao(cota_cm: number, estacao: Estacao): Situacao | null {
   const { cota_atencao_cm: a, cota_alerta_cm: al, cota_emergencia_cm: e } = estacao
   if (a == null || al == null || e == null) return null
+  if (estacao.sentido_alerta === 'seca') {
+    if (cota_cm <= e) return 'emergencia'
+    if (cota_cm <= al) return 'alerta'
+    if (cota_cm <= a) return 'atencao'
+    return 'normal'
+  }
   if (cota_cm >= e) return 'emergencia'
   if (cota_cm >= al) return 'alerta'
   if (cota_cm >= a) return 'atencao'

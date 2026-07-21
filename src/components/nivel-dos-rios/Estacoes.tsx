@@ -1,14 +1,15 @@
 import React, { useState } from 'react'
 import { Radio, Plus, Pencil, Trash2, X, Power } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import type { Estacao } from './types'
+import type { Estacao, SentidoAlerta } from './types'
+import { SENTIDO_LABEL } from './types'
 
 interface Props {
   estacoes: Estacao[]
   recarregar: () => void
 }
 
-const VAZIO: Partial<Estacao> = { ativa: true }
+const VAZIO: Partial<Estacao> = { ativa: true, sentido_alerta: 'cheia' }
 
 export const Estacoes: React.FC<Props> = ({ estacoes, recarregar }) => {
   const [showForm, setShowForm] = useState(false)
@@ -22,6 +23,24 @@ export const Estacoes: React.FC<Props> = ({ estacoes, recarregar }) => {
 
   const salvar = async () => {
     if (!form.nome?.trim() || !form.rio?.trim() || !form.localidade?.trim()) return
+
+    // Validação dos limiares: não pode ser negativo, e a ordem depende do sentido.
+    // Cheia (enchente): atenção < alerta < emergência.  Seca (estiagem): atenção > alerta > emergência.
+    const at = form.cota_atencao_cm, al = form.cota_alerta_cm, em = form.cota_emergencia_cm
+    for (const [rot, v] of [['Atenção', at], ['Alerta', al], ['Emergência', em]] as [string, number | null | undefined][]) {
+      if (v != null && v < 0) { alert(`A cota de ${rot} não pode ser negativa.`); return }
+    }
+    const seca = form.sentido_alerta === 'seca'
+    if (seca) {
+      if (at != null && al != null && at <= al) { alert('Na estiagem, a cota de Atenção deve ser MAIOR que a de Alerta.'); return }
+      if (al != null && em != null && al <= em) { alert('Na estiagem, a cota de Alerta deve ser MAIOR que a de Emergência.'); return }
+      if (at != null && em != null && at <= em) { alert('Na estiagem, a cota de Atenção deve ser MAIOR que a de Emergência.'); return }
+    } else {
+      if (at != null && al != null && at >= al) { alert('Na cheia, a cota de Atenção deve ser MENOR que a de Alerta.'); return }
+      if (al != null && em != null && al >= em) { alert('Na cheia, a cota de Alerta deve ser MENOR que a de Emergência.'); return }
+      if (at != null && em != null && at >= em) { alert('Na cheia, a cota de Atenção deve ser MENOR que a de Emergência.'); return }
+    }
+
     setSalvando(true)
     try {
       const payload = { ...form }
@@ -78,7 +97,7 @@ export const Estacoes: React.FC<Props> = ({ estacoes, recarregar }) => {
                 {[e.rio, e.localidade, e.codigo_ana ? `código ANA ${e.codigo_ana}` : null].filter(Boolean).join(' · ')}
               </p>
               <p className="text-xs text-text-secondary mt-0.5">
-                Limiares: {e.cota_atencao_cm != null ? `atenção ${(e.cota_atencao_cm / 100).toFixed(2)}m` : 'atenção —'}
+                Alerta de {e.sentido_alerta === 'seca' ? 'estiagem' : 'enchente'} · Limiares: {e.cota_atencao_cm != null ? `atenção ${(e.cota_atencao_cm / 100).toFixed(2)}m` : 'atenção —'}
                 {' · '}{e.cota_alerta_cm != null ? `alerta ${(e.cota_alerta_cm / 100).toFixed(2)}m` : 'alerta —'}
                 {' · '}{e.cota_emergencia_cm != null ? `emergência ${(e.cota_emergencia_cm / 100).toFixed(2)}m` : 'emergência —'}
               </p>
@@ -122,14 +141,24 @@ export const Estacoes: React.FC<Props> = ({ estacoes, recarregar }) => {
                 <p className="text-xs font-bold text-text-secondary uppercase mb-1">Limiares de cota (em metros — editáveis, mudam a cada temporada)</p>
                 <p className="text-[11px] text-text-secondary mb-2">Deixe em branco se ainda não houver valor oficial da temporada. Enquanto vazio, a estação aparece sem situação calculada.</p>
               </div>
+              <div className="col-span-2"><label className={lbl}>Tipo de alerta</label>
+                <select className={inp} value={form.sentido_alerta || 'cheia'} onChange={ev => setForm(f => ({ ...f, sentido_alerta: ev.target.value as SentidoAlerta }))}>
+                  {(['cheia', 'seca'] as SentidoAlerta[]).map(s => <option key={s} value={s}>{SENTIDO_LABEL[s]}</option>)}
+                </select>
+                <p className="text-[11px] text-text-secondary mt-1">
+                  {form.sentido_alerta === 'seca'
+                    ? 'Estiagem: dispara quando a cota BAIXA. Informe Atenção > Alerta > Emergência (ex.: 9,00 / 8,00 / 7,20).'
+                    : 'Enchente: dispara quando a cota SOBE. Informe Atenção < Alerta < Emergência.'}
+                </p>
+              </div>
               <div><label className={lbl}>Cota de Atenção (m)</label>
-                <input type="number" step="0.01" className={inp} value={form.cota_atencao_cm != null ? (form.cota_atencao_cm / 100) : ''}
+                <input type="number" step="0.01" min="0" className={inp} value={form.cota_atencao_cm != null ? (form.cota_atencao_cm / 100) : ''}
                   onChange={ev => setForm(f => ({ ...f, cota_atencao_cm: ev.target.value === '' ? null : Math.round(Number(ev.target.value) * 100) }))} /></div>
               <div><label className={lbl}>Cota de Alerta (m)</label>
-                <input type="number" step="0.01" className={inp} value={form.cota_alerta_cm != null ? (form.cota_alerta_cm / 100) : ''}
+                <input type="number" step="0.01" min="0" className={inp} value={form.cota_alerta_cm != null ? (form.cota_alerta_cm / 100) : ''}
                   onChange={ev => setForm(f => ({ ...f, cota_alerta_cm: ev.target.value === '' ? null : Math.round(Number(ev.target.value) * 100) }))} /></div>
               <div><label className={lbl}>Cota de Emergência (m)</label>
-                <input type="number" step="0.01" className={inp} value={form.cota_emergencia_cm != null ? (form.cota_emergencia_cm / 100) : ''}
+                <input type="number" step="0.01" min="0" className={inp} value={form.cota_emergencia_cm != null ? (form.cota_emergencia_cm / 100) : ''}
                   onChange={ev => setForm(f => ({ ...f, cota_emergencia_cm: ev.target.value === '' ? null : Math.round(Number(ev.target.value) * 100) }))} /></div>
             </div>
             <div className="p-4 border-t flex justify-end gap-2">
