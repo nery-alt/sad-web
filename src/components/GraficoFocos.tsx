@@ -23,6 +23,7 @@ export const GraficoFocos: React.FC = () => {
   const [registros, setRegistros] = useState<Registro[]>([])
   const [loading, setLoading] = useState(true)
   const [periodo, setPeriodo] = useState<Periodo>('dia')
+  const [filtroMun, setFiltroMun] = useState<string>('todos')
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -36,8 +37,12 @@ export const GraficoFocos: React.FC = () => {
 
   useEffect(() => { carregar() }, [carregar])
 
-  const validos = registros.filter(r => r.data_foco)
+  // Lista de municípios disponíveis (para o filtro)
+  const municipios = [...new Set(registros.map(r => r.municipio).filter((m): m is string => !!m))].sort()
+  // Aplica o filtro de município tanto na tela quanto no boletim
+  const validos = registros.filter(r => r.data_foco && (filtroMun === 'todos' || (r.municipio || '') === filtroMun))
   const total = validos.length
+  const escopoMun = filtroMun === 'todos' ? 'Todos os municípios' : filtroMun
 
   // Agrupa conforme o período escolhido
   const grupos = new Map<string, number>()
@@ -130,7 +135,7 @@ export const GraficoFocos: React.FC = () => {
       </style></head><body>
       <h1>Boletim de Focos de Calor</h1>
       <h2>Secretaria Municipal de Defesa Civil e Patrimonial — SEMDECP — Tefé/AM</h2>
-      <div class="data">Gerado em ${horaGeracao} · Período dos dados: ${diaBR(primeiro)} a ${diaBR(ultimo)}</div>
+      <div class="data">Gerado em ${horaGeracao} · Município: <b>${escopoMun}</b> · Período dos dados: ${diaBR(primeiro)} a ${diaBR(ultimo)}</div>
 
       <div class="cards">
         <div class="card"><b>${total}</b><span>Focos no total</span></div>
@@ -142,10 +147,10 @@ export const GraficoFocos: React.FC = () => {
       <h3>Atividade diária (últimos ${diaRows.length} dias com registro)</h3>
       ${diaRows.map(([d, v]) => linhaBarra(diaBR(d), v, maxDia, '#DC2626')).join('')}
 
-      <h3>Por município</h3>
+      ${filtroMun === 'todos' ? `<h3>Por município</h3>
       <table><tr><th>Município</th><th>Focos</th></tr>
         ${munRows.map(([m, v]) => `<tr><td>${m}</td><td>${v}</td></tr>`).join('')}
-      </table>
+      </table>` : ''}
 
       <h3>Por mês</h3>
       <table><tr><th>Mês</th><th>Focos</th></tr>
@@ -168,7 +173,13 @@ export const GraficoFocos: React.FC = () => {
           <h1 className="text-2xl font-bold flex items-center gap-2"><Flame size={24} className="text-error-expired" /> Focos de Calor — Histórico</h1>
           <p className="text-text-secondary text-sm">Contagem de focos detectados pelo INPE na região, ao longo do tempo.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center flex-wrap">
+          <select value={filtroMun} onChange={e => setFiltroMun(e.target.value)}
+            className="p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary-btn/20"
+            title="Filtrar por município">
+            <option value="todos">Todos os municípios</option>
+            {municipios.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
           <button onClick={gerarBoletim} disabled={validos.length === 0}
             className="flex items-center gap-2 bg-primary-btn text-white px-3 py-2 rounded-lg text-sm font-bold hover:opacity-90 disabled:opacity-40">
             <Printer size={15} /> Gerar Boletim
