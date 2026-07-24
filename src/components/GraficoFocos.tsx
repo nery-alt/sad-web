@@ -108,8 +108,8 @@ export const GraficoFocos: React.FC = () => {
     const mesRows = [...porMes.entries()].sort((a, b) => a[0].localeCompare(b[0]))
     const rotuloMes = (k: string) => { const [a, m] = k.split('-'); return `${MESES[Number(m) - 1]}/${a}` }
 
-    const linhaBarra = (label: string, valor: number, max: number, cor: string) =>
-      `<div class="barra-linha"><span class="barra-lbl">${label}</span><span class="barra-track"><span class="barra-fill" style="width:${Math.max(6, (valor / max) * 100)}%;background:${cor}">${valor}</span></span></div>`
+    const linhaBarra = (label: string, valor: number, max: number, pico: boolean) =>
+      `<div class="barra-linha"><span class="barra-lbl">${label}</span><span class="barra-track"><span class="barra-fill" style="width:${Math.max(6, (valor / max) * 100)}%;background:${pico ? '#7f1d1d' : '#DC2626'}">${valor}</span></span>${pico ? '<span class="pico">◄ maior do período</span>' : ''}</div>`
 
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Boletim de Focos de Calor</title>
       <style>
@@ -130,6 +130,7 @@ export const GraficoFocos: React.FC = () => {
         .barra-lbl{width:70px;font-size:10px;color:#555;text-align:right}
         .barra-track{flex:1;background:#f1f1f1;border-radius:4px;height:16px;overflow:hidden}
         .barra-fill{display:flex;align-items:center;justify-content:flex-end;height:100%;padding-right:5px;color:#fff;font-size:10px;font-weight:bold;border-radius:4px}
+        .pico{font-size:10px;color:#7f1d1d;font-weight:bold;white-space:nowrap}
         .rodape{margin-top:20px;font-size:10px;color:#999}
         @media print{body{margin:12px}}
       </style></head><body>
@@ -145,7 +146,7 @@ export const GraficoFocos: React.FC = () => {
       </div>
 
       <h3>Atividade diária (últimos ${diaRows.length} dias com registro)</h3>
-      ${diaRows.map(([d, v]) => linhaBarra(diaBR(d), v, maxDia, '#DC2626')).join('')}
+      ${diaRows.map(([d, v]) => linhaBarra(diaBR(d), v, maxDia, v === maxDia)).join('')}
 
       ${filtroMun === 'todos' ? `<h3>Por município</h3>
       <table><tr><th>Município</th><th>Focos</th></tr>
@@ -157,7 +158,7 @@ export const GraficoFocos: React.FC = () => {
         ${mesRows.map(([k, v]) => `<tr><td>${rotuloMes(k)}</td><td>${v}</td></tr>`).join('')}
       </table>
 
-      <p class="rodape">Fonte: detecção por satélite (INPE / Programa Queimadas). Os números podem ser subestimados em dias de forte nebulosidade. O histórico começa a ser gravado a partir do momento em que o mapa de focos é ativado no SAD. Documento gerado automaticamente pelo SAD — Sentinela Defesa Civil.</p>
+      <p class="rodape">Fonte: detecção por satélite (INPE / Programa Queimadas), coletada automaticamente todos os dias pelo SAD. Os números podem ser subestimados em dias de forte nebulosidade. Documento gerado automaticamente pelo SAD — Sentinela Defesa Civil.</p>
       </body></html>`
 
     const w = window.open('', '_blank')
@@ -219,27 +220,31 @@ export const GraficoFocos: React.FC = () => {
           <p className="text-text-secondary text-sm italic">Carregando…</p>
         ) : linhas.length === 0 ? (
           <p className="text-text-secondary text-sm italic">
-            Ainda não há focos gravados. Abra o Mapa de Ocorrências e ligue "🔥 Focos INPE" — a partir daí o histórico começa a ser registrado.
+            Ainda não há focos gravados. A coleta automática do INPE roda todo dia de manhã — os dados aparecem aqui a partir da próxima execução.
           </p>
         ) : (
           <div className="space-y-1.5">
-            {linhas.map(l => (
+            {linhas.map(l => {
+              const pico = l.valor === maxVal
+              return (
               <div key={l.ordem} className="flex items-center gap-2">
-                <div className="w-20 text-xs text-text-secondary text-right shrink-0">{l.label}</div>
+                <div className={`w-20 text-xs text-right shrink-0 ${pico ? 'text-error-expired font-bold' : 'text-text-secondary'}`}>{l.label}</div>
                 <div className="flex-1 bg-gray-100 rounded h-6 relative overflow-hidden">
-                  <div className="h-full rounded bg-error-expired/80 flex items-center justify-end pr-2"
+                  <div className={`h-full rounded flex items-center justify-end pr-2 ${pico ? 'bg-error-expired' : 'bg-error-expired/70'}`}
                     style={{ width: `${Math.max(6, (l.valor / maxVal) * 100)}%` }}>
                     <span className="text-xs font-bold text-white">{l.valor}</span>
                   </div>
                 </div>
+                {pico && <span className="text-[10px] font-bold text-error-expired shrink-0">maior</span>}
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
 
       <p className="text-xs text-text-secondary mt-2 shrink-0">
-        O histórico é gravado quando você abre o mapa e liga os focos. Dados de detecção por satélite (INPE) — podem ser subestimados em dias nublados.
+        Coletado automaticamente do INPE todos os dias. Dados de detecção por satélite — podem ser subestimados em dias nublados.
       </p>
     </div>
   )
