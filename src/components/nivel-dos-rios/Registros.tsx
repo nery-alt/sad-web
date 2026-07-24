@@ -28,6 +28,10 @@ export const Registros: React.FC<Props> = ({ estacoes, registrosNivel, registros
   const [salvando, setSalvando] = useState(false)
 
   const estacaoDe = (id: string) => estacoes.find(e => e.id === id)
+  // Só estações ativas aparecem aqui. Estações desativadas ficam arquivadas
+  // (dados preservados no banco e visíveis no Histórico), fora do dia a dia.
+  const estacoesAtivas = estacoes.filter(e => e.ativa)
+  const idsAtivas = new Set(estacoesAtivas.map(e => e.id))
 
   const tabela = tipo === 'nivel' ? 'registros_nivel' : tipo === 'chuva' ? 'registros_chuva' : 'registros_umidade'
   const fonteBase = tipo === 'nivel' ? registrosNivel : tipo === 'chuva' ? registrosChuva : registrosUmidade
@@ -35,14 +39,16 @@ export const Registros: React.FC<Props> = ({ estacoes, registrosNivel, registros
   const filtrados = useMemo(() => {
     let lista = [...fonteBase] as (RegistroNivel | RegistroChuva | RegistroUmidade)[]
     if (filtroEstacao !== 'todas') lista = lista.filter(r => r.estacao_id === filtroEstacao)
+    else lista = lista.filter(r => idsAtivas.has(r.estacao_id))
     if (tipo === 'nivel' && !mostrarHistoricoAna) lista = (lista as RegistroNivel[]).filter(r => r.fonte !== 'ana')
     return lista.sort((a, b) => b.data.localeCompare(a.data))
-  }, [fonteBase, filtroEstacao, tipo, mostrarHistoricoAna])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fonteBase, filtroEstacao, tipo, mostrarHistoricoAna, estacoes])
 
   const visiveis = filtrados.slice(0, limite)
 
   const valorDefault = (): any => {
-    const base = { estacao_id: filtroEstacao !== 'todas' ? filtroEstacao : (estacoes[0]?.id || ''), data: hoje(), observacoes: '' }
+    const base = { estacao_id: filtroEstacao !== 'todas' ? filtroEstacao : (estacoesAtivas[0]?.id || ''), data: hoje(), observacoes: '' }
     if (tipo === 'nivel') return { ...base, cota_cm: '', fonte: 'manual', responsavel: '', situacao_tendencia: '' }
     if (tipo === 'chuva') return { ...base, chuva_mm: '', fonte: 'manual', responsavel: '' }
     return { ...base, umidade_pct: '', fonte: 'manual', responsavel: '' }
@@ -126,7 +132,7 @@ export const Registros: React.FC<Props> = ({ estacoes, registrosNivel, registros
       <div className="flex gap-2 mb-3 shrink-0 flex-wrap items-center">
         <select className="p-2 border border-gray-200 rounded-lg text-sm outline-none" value={filtroEstacao} onChange={e => setFiltroEstacao(e.target.value)}>
           <option value="todas">Todas as estações</option>
-          {estacoes.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+          {estacoesAtivas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
         </select>
         {tipo === 'nivel' && (
           <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
@@ -135,11 +141,11 @@ export const Registros: React.FC<Props> = ({ estacoes, registrosNivel, registros
           </label>
         )}
         <div className="flex-1" />
-        <button onClick={abrirNovo} disabled={estacoes.length === 0} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm disabled:opacity-50">
+        <button onClick={abrirNovo} disabled={estacoesAtivas.length === 0} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm disabled:opacity-50">
           <Plus size={18} /> Novo Registro
         </button>
       </div>
-      {estacoes.length === 0 && <p className="text-deadline-alert text-xs mb-2 shrink-0">Cadastre uma estação antes de lançar registros.</p>}
+      {estacoesAtivas.length === 0 && <p className="text-deadline-alert text-xs mb-2 shrink-0">Cadastre uma estação antes de lançar registros.</p>}
 
       {/* Lista */}
       <div className="flex-1 overflow-y-auto space-y-1.5">
@@ -190,7 +196,7 @@ export const Registros: React.FC<Props> = ({ estacoes, registrosNivel, registros
               <div className="col-span-2"><label className={lbl}>Estação *</label>
                 <select className={inp} value={form.estacao_id || ''} onChange={e => setForm((f: any) => ({ ...f, estacao_id: e.target.value }))}>
                   <option value="">Selecione...</option>
-                  {estacoes.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                  {estacoesAtivas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
                 </select></div>
               <div><label className={lbl}>Data *</label>
                 <input type="date" className={inp} value={form.data || ''} onChange={e => setForm((f: any) => ({ ...f, data: e.target.value }))} /></div>
