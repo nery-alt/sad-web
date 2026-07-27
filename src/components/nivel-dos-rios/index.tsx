@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Waves, LayoutDashboard, Radio, ListPlus, LineChart, Printer } from 'lucide-react'
+import { Waves, LayoutDashboard, Radio, ListPlus, LineChart, Printer, Route } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Estacao, RegistroNivel, RegistroChuva, RegistroUmidade } from './types'
 import { Painel } from './Painel'
+import { Corredor } from './Corredor'
 import { Estacoes } from './Estacoes'
 import { Registros } from './Registros'
 import { Historico } from './Historico'
 import { Boletim } from './Boletim'
 
-type Aba = 'painel' | 'estacoes' | 'registros' | 'historico' | 'boletim'
+type Aba = 'painel' | 'corredor' | 'estacoes' | 'registros' | 'historico' | 'boletim'
 
 export const NivelDosRios: React.FC = () => {
   const [aba, setAba] = useState<Aba>('painel')
@@ -53,6 +54,7 @@ export const NivelDosRios: React.FC = () => {
 
   const abas: { id: Aba; label: string; icon: React.ReactNode }[] = [
     { id: 'painel', label: 'Painel', icon: <LayoutDashboard size={15} /> },
+    { id: 'corredor', label: 'Corredor', icon: <Route size={15} /> },
     { id: 'estacoes', label: 'Estações', icon: <Radio size={15} /> },
     { id: 'registros', label: 'Registros', icon: <ListPlus size={15} /> },
     { id: 'historico', label: 'Histórico', icon: <LineChart size={15} /> },
@@ -84,6 +86,8 @@ export const NivelDosRios: React.FC = () => {
           <p className="text-text-secondary text-sm italic p-4">Carregando...</p>
         ) : aba === 'painel' ? (
           <Painel estacoes={estacoes} registrosNivel={registrosNivel} registrosChuva={registrosChuva} registrosUmidade={registrosUmidade} irPara={setAba} />
+        ) : aba === 'corredor' ? (
+          <Corredor estacoes={estacoes} registrosNivel={registrosNivel} />
         ) : aba === 'estacoes' ? (
           <Estacoes estacoes={estacoes} recarregar={carregar} />
         ) : aba === 'registros' ? (
