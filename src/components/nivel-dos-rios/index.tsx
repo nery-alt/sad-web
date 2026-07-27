@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import type { Estacao, RegistroNivel, RegistroChuva, RegistroUmidade } from './types'
 import { Painel } from './Painel'
 import { Corredor } from './Corredor'
+import { Previsao } from './Previsao'
 import { Estacoes } from './Estacoes'
 import { Registros } from './Registros'
 import { Historico } from './Historico'
@@ -87,7 +88,10 @@ export const NivelDosRios: React.FC = () => {
         ) : aba === 'painel' ? (
           <Painel estacoes={estacoes} registrosNivel={registrosNivel} registrosChuva={registrosChuva} registrosUmidade={registrosUmidade} irPara={setAba} />
         ) : aba === 'corredor' ? (
-          <Corredor estacoes={estacoes} registrosNivel={registrosNivel} />
+          <div className="h-full overflow-y-auto space-y-4">
+            <Previsao estacoes={estacoes} registrosNivel={registrosNivel} />
+            <Corredor estacoes={estacoes} registrosNivel={registrosNivel} />
+          </div>
         ) : aba === 'estacoes' ? (
           <Estacoes estacoes={estacoes} recarregar={carregar} />
         ) : aba === 'registros' ? (

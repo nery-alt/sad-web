@@ -45,7 +45,7 @@ export const Corredor: React.FC<Props> = ({ estacoes, registrosNivel }) => {
   const comDados = corredor.filter(e => dadosDe(e.id).ultimo)
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div>
       <div className="bg-primary-btn/5 border border-primary-btn/20 rounded-lg p-3 mb-4 text-sm">
         <p className="font-bold text-text-main">Corredor do Solimões — da fronteira até Manaus</p>
         <p className="text-text-secondary text-xs mt-0.5">
