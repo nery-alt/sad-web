@@ -44,7 +44,7 @@ export interface Protocolo {
   descricao: string
   data_entrada: string
   prazo: string
-  status: 'aberto' | 'em_andamento' | 'concluido'
+  status: 'aberto' | 'em_andamento' | 'concluido' | 'arquivado'
   historico: string
   criado_em: string
   atualizado_em: string

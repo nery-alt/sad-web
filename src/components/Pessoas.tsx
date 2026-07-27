@@ -12,6 +12,7 @@ interface PessoasProps {
   onSelectPessoa: (pessoa: Pessoa | null) => void
   onSavePessoa: (pessoa: Pessoa) => void
   onDeletePessoa: (id: number) => void
+  onUpdateStatus: (id: number, status: string) => void
   onImportDoc: (pessoaId: number, file: File) => Promise<void>
   onOpenFile: (path: string) => void
   onDeleteDoc: (id: number, caminho?: string) => void
@@ -57,7 +58,7 @@ function Campo({ label, span2, children }: { label: string; span2?: boolean; chi
 
 export const Pessoas: React.FC<PessoasProps> = ({
   pessoas, protocolos, documentos, documentosGerados, tarefas,
-  selectedPessoa, onSelectPessoa, onSavePessoa, onDeletePessoa,
+  selectedPessoa, onSelectPessoa, onSavePessoa, onDeletePessoa, onUpdateStatus,
   onImportDoc, onOpenFile, onDeleteDoc, onDeleteDocGerado,
   onNewDocGerado, onEditDocGerado, onNewTarefa, formatDate,
 }) => {
@@ -316,7 +317,18 @@ export const Pessoas: React.FC<PessoasProps> = ({
             {selectedPessoa.prioridade && <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded mt-1 ml-1 ${selectedPessoa.prioridade === 'Emergencial' || selectedPessoa.prioridade === 'Alta' ? 'bg-red-100 text-red-700' : selectedPessoa.prioridade === 'Média' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>⚑ {selectedPessoa.prioridade}</span>}
             <p className="text-text-secondary text-sm flex items-center gap-2 mt-1"><Building2 size={14} /> {selectedPessoa.orgao || 'Sem órgão'}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center flex-wrap">
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-text-secondary">Status:</span>
+              <select value={selectedPessoa.status_ocorrencia || 'em_aberto'}
+                onChange={e => onUpdateStatus(selectedPessoa.id!, e.target.value)}
+                className="p-1.5 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary-btn/20 cursor-pointer">
+                <option value="em_aberto">Em aberto</option>
+                <option value="em_andamento">Em andamento</option>
+                <option value="concluido">Concluído</option>
+                <option value="arquivado">Arquivado</option>
+              </select>
+            </div>
             <button onClick={() => { setPessoaFormData({ ...PESSOA_VAZIA, ...selectedPessoa }); setIsPessoaFormOpen(true) }} className="flex items-center gap-1 px-3 py-1.5 bg-primary-btn text-white rounded-lg hover:opacity-90 text-sm"><Edit size={16} /> Editar</button>
             <button onClick={() => onDeletePessoa(selectedPessoa.id!)} className="flex items-center gap-1 px-3 py-1.5 bg-error-expired text-white rounded-lg hover:opacity-90 text-sm"><Trash2 size={16} /> Excluir</button>
           </div>

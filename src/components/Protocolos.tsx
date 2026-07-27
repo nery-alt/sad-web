@@ -185,9 +185,10 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
             <div>
               <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Status</label>
               <select className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as Protocolo['status']})}>
-                <option value="aberto">Aberto</option>
+                <option value="aberto">Registrado</option>
                 <option value="em_andamento">Em Andamento</option>
                 <option value="concluido">Concluído</option>
+                <option value="arquivado">Arquivado</option>
               </select>
             </div>
             <div className="col-span-2">
@@ -424,9 +425,10 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
               <h3 className="font-bold text-sm mb-3">Alterar Status</h3>
               <select value={selectedProtocolo.status} onChange={e => onUpdateStatus(selectedProtocolo.id!, e.target.value)} className="w-full p-2 border border-gray-200 rounded text-sm mb-3 outline-none focus:ring-2 focus:ring-primary-btn/20">
-                <option value="aberto">Aberto</option>
+                <option value="aberto">Registrado</option>
                 <option value="em_andamento">Em Andamento</option>
                 <option value="concluido">Concluído</option>
+                <option value="arquivado">Arquivado</option>
               </select>
               {prazoStatus && (
                 <div className={`p-3 rounded text-center font-bold text-sm ${prazoStatus.color}`}>

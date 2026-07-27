@@ -269,9 +269,20 @@ const App: React.FC = () => {
     const now = new Date().toISOString()
     if (pessoa.id) {
       await supabase.from('pessoas').update({ ...pessoa, atualizado_em: now }).eq('id', pessoa.id)
+      setSelectedPessoa(prev => prev?.id === pessoa.id ? { ...prev, ...pessoa, atualizado_em: now } : prev)
     } else {
       await supabase.from('pessoas').insert({ ...pessoa, criado_em: now, atualizado_em: now })
     }
+    // Recarrega a lista na hora (não depende do realtime chegar).
+    fetchData()
+  }
+
+  const handleUpdatePessoaStatus = async (id: number, status: string) => {
+    if (bloqueadoSomenteLeitura()) return
+    const now = new Date().toISOString()
+    setPessoas(prev => prev.map(p => p.id === id ? { ...p, status_ocorrencia: status as Pessoa['status_ocorrencia'], atualizado_em: now } : p))
+    setSelectedPessoa(prev => prev?.id === id ? { ...prev, status_ocorrencia: status as Pessoa['status_ocorrencia'], atualizado_em: now } : prev)
+    await supabase.from('pessoas').update({ status_ocorrencia: status, atualizado_em: now }).eq('id', id)
   }
 
   const handleDeletePessoa = async (id: number) => {
@@ -364,8 +375,10 @@ const App: React.FC = () => {
 
   const handleUpdateProtocoloStatus = async (id: number, newStatus: string) => {
     if (bloqueadoSomenteLeitura()) return
-    await supabase.from('protocolos').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
+    // Atualiza a tela na hora (otimista), sem depender do realtime.
+    setProtocolos(prev => prev.map(p => p.id === id ? { ...p, status: newStatus as Protocolo['status'] } : p))
     if (selectedProtocolo?.id === id) setSelectedProtocolo(prev => prev ? { ...prev, status: newStatus as Protocolo['status'] } : null)
+    await supabase.from('protocolos').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
   }
 
   const handleAddMovimentacao = async (id: number, novaMovimentacao: string) => {
@@ -528,6 +541,7 @@ const App: React.FC = () => {
               documentosGerados={documentosGerados} tarefas={tarefas}
               selectedPessoa={selectedPessoa} onSelectPessoa={setSelectedPessoa}
               onSavePessoa={handleSavePessoa} onDeletePessoa={handleDeletePessoa}
+              onUpdateStatus={handleUpdatePessoaStatus}
               onImportDoc={handleImportDoc} onOpenFile={handleOpenFile}
               onDeleteDoc={handleDeleteDocumento} onDeleteDocGerado={handleDeleteDocumentoGerado}
               onNewDocGerado={handleNewDocGerado} onEditDocGerado={handleEditDocGerado}
