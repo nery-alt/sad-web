@@ -207,7 +207,9 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
 
   if (selectedProtocolo) {
     const historico: Movimentacao[] = JSON.parse(selectedProtocolo.historico || '[]')
-    const prazoStatus = selectedProtocolo.status !== 'concluido' ? getPrazoStatus(selectedProtocolo.prazo) : null
+    // Protocolo encerrado (concluído ou arquivado) não cobra prazo — não mostra "vencido".
+    const encerrado = selectedProtocolo.status === 'concluido' || selectedProtocolo.status === 'arquivado'
+    const prazoStatus = !encerrado ? getPrazoStatus(selectedProtocolo.prazo) : null
     const encPendentes = protocoloEncaminhamentos.filter(e => e.status === 'pendente').length
 
     return (
@@ -232,11 +234,15 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
         <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm mb-4">
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-bold text-sm">Fluxo do Protocolo</h3>
-            {prazoStatus && (
+            {prazoStatus ? (
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${prazoStatus.color}`}>
                 Prazo: {formatDate(selectedProtocolo.prazo)} — {prazoStatus.label}
               </span>
-            )}
+            ) : selectedProtocolo.status === 'arquivado' ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-gray-200 text-gray-600">ARQUIVADO</span>
+            ) : selectedProtocolo.status === 'concluido' ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-success/10 text-success">CONCLUÍDO</span>
+            ) : null}
           </div>
           <StepperStatus status={selectedProtocolo.status} />
           <div className="flex gap-2 mt-3">
@@ -485,7 +491,7 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
           </div>
           <div className="divide-y divide-gray-200">
             {filteredProtocolos.map(pr => {
-              const prazoStatus = pr.status !== 'concluido' ? getPrazoStatus(pr.prazo) : null
+              const prazoStatus = (pr.status !== 'concluido' && pr.status !== 'arquivado') ? getPrazoStatus(pr.prazo) : null
               const encPend = encaminhamentos.filter(e => e.protocolo_id === pr.id && e.status === 'pendente').length
               return (
                 <div key={pr.id} onClick={() => onSelectProtocolo(pr)} className="grid grid-cols-12 gap-0 hover:bg-primary-btn/5 cursor-pointer transition-colors text-sm">
