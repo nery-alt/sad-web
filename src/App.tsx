@@ -361,9 +361,12 @@ const App: React.FC = () => {
     const payload = { ...data, historico, data_entrada: data.data_entrada || null, prazo: data.prazo || null }
     if (protocolo.id) {
       await supabase.from('protocolos').update({ ...payload, atualizado_em: now }).eq('id', protocolo.id)
+      // Atualiza o detalhe aberto na hora (sem depender do realtime).
+      setSelectedProtocolo(prev => (prev && prev.id === protocolo.id) ? { ...prev, ...data, atualizado_em: now } : prev)
     } else {
       await supabase.from('protocolos').insert({ ...payload, criado_em: now, atualizado_em: now })
     }
+    fetchData()
   }
 
   const handleDeleteProtocolo = async (id: number) => {

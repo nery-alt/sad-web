@@ -214,13 +214,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const stats = useMemo(() => ({
     abertos: protocolos.filter(p => p.status === 'aberto' || p.status === 'em_andamento').length,
-    vencendo: protocolos.filter(p => { const s = getPrazoStatus(p.prazo); return s?.label === 'Vencendo' && p.status !== 'concluido' }).length,
-    vencidos: protocolos.filter(p => { const s = getPrazoStatus(p.prazo); return s?.label === 'Vencido' && p.status !== 'concluido' }).length,
+    vencendo: protocolos.filter(p => { const s = getPrazoStatus(p.prazo); return s?.label === 'Vencendo' && p.status !== 'concluido' && p.status !== 'arquivado' }).length,
+    vencidos: protocolos.filter(p => { const s = getPrazoStatus(p.prazo); return s?.label === 'Vencido' && p.status !== 'concluido' && p.status !== 'arquivado' }).length,
     concluidosMes: protocolos.filter(p => { const d = new Date(p.atualizado_em); return p.status === 'concluido' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() }).length,
   }), [protocolos, getPrazoStatus, now])
 
   const protocolosParados = useMemo(() =>
-    protocolos.filter(p => { if (p.status === 'concluido') return false; const diffDias = Math.floor((now.getTime() - new Date(p.atualizado_em).getTime()) / 86400000); return diffDias >= 7 })
+    protocolos.filter(p => { if (p.status === 'concluido' || p.status === 'arquivado') return false; const diffDias = Math.floor((now.getTime() - new Date(p.atualizado_em).getTime()) / 86400000); return diffDias >= 7 })
   , [protocolos, now])
 
   const dadosRelatorio = useMemo(() => {
