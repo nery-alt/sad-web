@@ -31,6 +31,18 @@ function narrativa(nome: string, situacao: Situacao | null | undefined, tendenci
 export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosChuva, registrosUmidade, registrosClima, focosPorMun }) => {
   // Município da estação (extraído da localidade, ex.: "Tefé/AM - ..." → "TEFÉ").
   const municipioDe = (e: Estacao) => (e.localidade || '').split('/')[0].trim().toUpperCase()
+
+  // Variação acumulada do nível em N dias (usa a leitura mais próxima com data <= alvo).
+  const variacaoNo = (serie: RegistroNivel[], dias: number): { cm: number; de: string } | null => {
+    if (serie.length < 2) return null
+    const ultimo = serie[serie.length - 1]
+    const alvo = new Date(ultimo.data + 'T12:00:00'); alvo.setDate(alvo.getDate() - dias)
+    const alvoStr = alvo.toISOString().slice(0, 10)
+    let ref: RegistroNivel | null = null
+    for (const r of serie) { if (r.data <= alvoStr) ref = r; else break }
+    if (!ref || ref.data === ultimo.data) return null
+    return { cm: ultimo.cota_cm - ref.cota_cm, de: ref.data }
+  }
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set(estacoes.filter(e => e.ativa).map(e => e.id)))
 
   const toggle = (id: string) => setSelecionadas(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -99,6 +111,15 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
           </table>
 
           <p class="narrativa">${narrativa(e.nome, situacao, ultimo.situacao_tendencia, variacao)}</p>
+
+          ${(() => {
+            const janelas = [7, 15, 30].map(d => ({ d, v: variacaoNo(nivel, d) })).filter(x => x.v) as { d: number; v: { cm: number; de: string } }[]
+            if (!janelas.length) return ''
+            return `<p class="secao">Variação acumulada do nível</p>
+            <table class="resumo">
+              ${janelas.map(({ d, v }) => `<tr><td>Nos últimos ${d} dias (desde ${dataBR(v.de)})</td><td>${v.cm > 0 ? 'subiu +' : v.cm < 0 ? 'baixou −' : 'estável '}${Math.abs(v.cm)} cm (${(Math.abs(v.cm) / 100).toFixed(2)} m)</td></tr>`).join('')}
+            </table>`
+          })()}
 
           ${comp ? `
           <p class="secao">Comparação histórica para o dia ${dataBR(ultimo.data).slice(0, 5)} (${comp.anos} ano(s) com registro na série ANA):</p>
