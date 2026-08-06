@@ -1,13 +1,15 @@
 import React, { useState } from 'react'
 import { Printer, Radio } from 'lucide-react'
-import type { Estacao, RegistroNivel, RegistroChuva, RegistroUmidade, Situacao, Tendencia } from './types'
-import { SITUACAO_LABEL, TENDENCIA_LABEL, dataBR } from './types'
+import type { Estacao, RegistroNivel, RegistroChuva, RegistroUmidade, RegistroClima, Situacao, Tendencia } from './types'
+import { SITUACAO_LABEL, TENDENCIA_LABEL, CLIMA_LABEL, CLIMA_ORDEM, dataBR } from './types'
 
 interface Props {
   estacoes: Estacao[]
   registrosNivel: RegistroNivel[]
   registrosChuva: RegistroChuva[]
   registrosUmidade: RegistroUmidade[]
+  registrosClima: RegistroClima[]
+  focos30: number
 }
 
 const corSituacao = (s: Situacao | null | undefined) =>
@@ -26,7 +28,7 @@ function narrativa(nome: string, situacao: Situacao | null | undefined, tendenci
   return frase + '.'
 }
 
-export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosChuva, registrosUmidade }) => {
+export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosChuva, registrosUmidade, registrosClima, focos30 }) => {
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set(estacoes.filter(e => e.ativa).map(e => e.id)))
 
   const toggle = (id: string) => setSelecionadas(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -36,6 +38,16 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
   const nivelDe = (id: string) => registrosNivel.filter(r => r.estacao_id === id).sort((a, b) => a.data.localeCompare(b.data))
   const chuvaDe = (id: string) => registrosChuva.filter(r => r.estacao_id === id).sort((a, b) => a.data.localeCompare(b.data))
   const umidadeDe = (id: string) => registrosUmidade.filter(r => r.estacao_id === id).sort((a, b) => a.data.localeCompare(b.data))
+
+  // Clima do dia mais recente de cada estação (variáveis ordenadas).
+  const climaDe = (id: string) => {
+    const rows = registrosClima.filter(r => r.estacao_id === id)
+    if (!rows.length) return null
+    const ultimaData = rows.reduce((m, r) => r.data > m ? r.data : m, rows[0].data)
+    const vars = rows.filter(r => r.data === ultimaData)
+      .sort((a, b) => CLIMA_ORDEM.indexOf(a.variavel) - CLIMA_ORDEM.indexOf(b.variavel))
+    return { data: ultimaData, vars }
+  }
 
   // Máx/mín histórico no mesmo dia-calendário (mês/dia), considerando toda a série ANA importada.
   const comparativoHistorico = (id: string, dataRef: string) => {
@@ -62,6 +74,7 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
       const comp = ultimo ? comparativoHistorico(e.id, ultimo.data) : null
       const chuva = chuvaDe(e.id).slice(-5).reverse()
       const umid = umidadeDe(e.id).slice(-5).reverse()
+      const clima = climaDe(e.id)
 
       return `
         <div class="estacao">
@@ -70,12 +83,12 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
               <div class="nome-estacao">${e.nome}</div>
               <div class="sub">${e.rio} — ${e.localidade}</div>
             </div>
-            ${situacao ? `<div class="badge" style="background:${cor}1a;color:${cor}">${SITUACAO_LABEL[situacao].toUpperCase()}</div>` : '<div class="badge" style="background:#f3f4f6;color:#6b7280">SEM LIMIARES</div>'}
+            ${situacao ? `<div class="badge" style="background:${cor}1a;color:${cor}">RIO: ${SITUACAO_LABEL[situacao].toUpperCase()}</div>` : '<div class="badge" style="background:#f3f4f6;color:#6b7280">RIO: SEM LIMIARES</div>'}
           </div>
 
-          ${!ultimo ? '<p class="vazio">Sem leituras registradas para esta estação.</p>' : `
+          ${!ultimo ? '<p class="vazio">Sem leituras de nível registradas para esta estação.</p>' : `
           <table class="resumo">
-            <tr><td>Última leitura</td><td>${(ultimo.cota_cm / 100).toFixed(2)} m — ${dataBR(ultimo.data)} (fonte: ${ultimo.fonte})</td></tr>
+            <tr><td>Nível — última leitura</td><td>${(ultimo.cota_cm / 100).toFixed(2)} m — ${dataBR(ultimo.data)} (fonte: ${ultimo.fonte})</td></tr>
             <tr><td>Variação (leitura anterior)</td><td>${variacao === null ? '—' : (variacao > 0 ? '+' : '') + variacao + ' cm'}</td></tr>
             ${ultimo.situacao_tendencia ? `<tr><td>Tendência observada</td><td>${TENDENCIA_LABEL[ultimo.situacao_tendencia]}</td></tr>` : ''}
             ${e.cota_atencao_cm != null ? `<tr><td>Cota de Atenção</td><td>${(e.cota_atencao_cm / 100).toFixed(2)} m</td></tr>` : ''}
@@ -86,49 +99,69 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
           <p class="narrativa">${narrativa(e.nome, situacao, ultimo.situacao_tendencia, variacao)}</p>
 
           ${comp ? `
-          <p class="legenda-comparativo">Comparação histórica para o dia ${dataBR(ultimo.data).slice(0, 5)} (${comp.anos} ano(s) com registro na série importada):</p>
+          <p class="secao">Comparação histórica para o dia ${dataBR(ultimo.data).slice(0, 5)} (${comp.anos} ano(s) com registro na série ANA):</p>
           <table class="resumo">
             <tr><td>Máxima já registrada nesse dia</td><td>${(comp.max.cota_cm / 100).toFixed(2)} m — ${dataBR(comp.max.data)}</td></tr>
             <tr><td>Mínima já registrada nesse dia</td><td>${(comp.min.cota_cm / 100).toFixed(2)} m — ${dataBR(comp.min.data)}</td></tr>
           </table>` : ''}
           `}
 
+          ${clima && clima.vars.length ? `
+          <p class="secao">Situação ambiental — ${dataBR(clima.data)}</p>
+          <table class="resumo">
+            ${clima.vars.map(v => `<tr><td>${CLIMA_LABEL[v.variavel] || v.variavel}</td><td>${v.valor}${v.unidade ? ' ' + v.unidade : ''}${v.situacao ? ` <span style="color:${corSituacao(v.situacao)};font-weight:bold">— ${SITUACAO_LABEL[v.situacao]}</span>` : ''}</td></tr>`).join('')}
+          </table>` : ''}
+
           ${(chuva.length > 0 || umid.length > 0) ? `
-          <div class="clima">
+          <div class="clima-linha">
             ${chuva.length > 0 ? `<div><b>Chuva (últimos registros)</b><br>${chuva.map(c => `${dataBR(c.data)}: ${c.chuva_mm} mm`).join(' · ')}</div>` : ''}
-            ${umid.length > 0 ? `<div><b>Umidade relativa (últimos registros)</b><br>${umid.map(u => `${dataBR(u.data)}: ${u.umidade_pct}%`).join(' · ')}</div>` : ''}
+            ${umid.length > 0 ? `<div><b>Umidade média (últimos registros)</b><br>${umid.map(u => `${dataBR(u.data)}: ${u.umidade_pct}%`).join(' · ')}</div>` : ''}
           </div>` : ''}
         </div>`
     }).join('')
 
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Boletim de Monitoramento — Nível dos Rios</title>
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Boletim Ambiental</title>
       <style>
-        body{font-family:Arial,sans-serif;font-size:12px;margin:24px;color:#111}
-        h1{font-size:18px;margin:0 0 2px}
-        h2{font-size:12px;font-weight:normal;color:#555;margin:0 0 4px}
-        .data{font-size:11px;color:#777;margin-bottom:18px}
+        body{font-family:Arial,Helvetica,sans-serif;font-size:12px;margin:24px;color:#1a1a1a;line-height:1.45}
+        h1{font-size:19px;font-weight:800;margin:0 0 2px}
+        h2{font-size:11px;font-weight:normal;color:#444;margin:0 0 4px}
+        .data{font-size:11px;color:#666;margin-bottom:8px;padding-bottom:8px;border-bottom:2px solid #1a1a1a}
+        .focos{font-size:11px;background:#fff4f2;border:1px solid #f2c8c0;border-radius:6px;padding:8px 10px;margin:12px 0 16px}
         .estacao{border:1px solid #ccc;border-radius:8px;padding:14px 16px;margin-bottom:14px;page-break-inside:avoid}
         .cabecalho-estacao{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
         .nome-estacao{font-size:15px;font-weight:bold}
         .sub{font-size:11px;color:#666}
-        .badge{font-size:10px;font-weight:bold;padding:3px 8px;border-radius:4px}
+        .badge{font-size:10px;font-weight:bold;padding:3px 8px;border-radius:4px;white-space:nowrap}
         .resumo{width:100%;border-collapse:collapse;margin:6px 0}
-        .resumo td{padding:3px 0;border-bottom:1px solid #eee}
-        .resumo td:first-child{color:#555;width:60%}
+        .resumo td{padding:4px 0;border-bottom:1px solid #eee}
+        .resumo td:first-child{color:#555;width:55%}
         .resumo td:last-child{text-align:right;font-weight:600}
         .narrativa{margin:8px 0;line-height:1.5;font-style:italic;color:#333}
-        .legenda-comparativo{font-size:11px;color:#666;margin-top:8px}
-        .clima{display:flex;gap:24px;font-size:11px;color:#444;margin-top:8px;border-top:1px solid #eee;padding-top:8px}
+        .secao{font-size:11px;color:#333;font-weight:bold;margin:12px 0 4px}
+        .clima-linha{display:flex;gap:24px;font-size:11px;color:#444;margin-top:8px;border-top:1px solid #eee;padding-top:8px}
         .vazio{font-size:11px;color:#888;font-style:italic}
-        .rodape{margin-top:20px;font-size:10px;color:#999}
+        .fontes{margin-top:22px;padding:10px 12px;background:#fafafa;border:1px solid #e5e5e5;border-radius:6px;font-size:10px;color:#555;line-height:1.5}
+        .rodape{margin-top:14px;font-size:10px;color:#999}
         @media print{body{margin:12px}}
       </style>
       </head><body>
-      <h1>Boletim de Monitoramento — Nível dos Rios</h1>
-      <h2>Secretaria Municipal de Defesa Civil e Patrimonial — SEMDECP — Tefé/AM</h2>
-      <div class="data">Gerado em ${horaGeracao} · ${lista.length} estação(ões)</div>
+      <h1>BOLETIM AMBIENTAL</h1>
+      <h2>Secretaria Municipal de Defesa Civil e Patrimonial — SEMDECP · Tefé/AM</h2>
+      <div class="data">Emitido em ${horaGeracao} · ${lista.length} estação(ões) monitorada(s)</div>
+
+      <div class="focos">Focos de calor na região nos <b>últimos 30 dias: ${focos30}</b> — detalhamento no Boletim de Focos de Calor (documento próprio).</div>
+
       ${blocos}
-      <p class="rodape">Cotas de atenção/alerta/emergência são valores editáveis, definidos por temporada. Comparações históricas usam apenas os anos com dado importado para a estação (nem toda estação tem série ANA completa). Documento gerado automaticamente pelo SAD — Sentinela Defesa Civil.</p>
+
+      <div class="fontes"><b>Fontes dos dados:</b>
+        Nível do rio e chuva — Agência Nacional de Águas e Saneamento Básico (ANA), telemetria.
+        Temperatura, sensação térmica, umidade e vento — Open-Meteo (modelo meteorológico).
+        Qualidade do ar (PM2,5 e PM10) — Open-Meteo Air Quality (base CAMS/ECMWF); classificação conforme Resolução CONAMA nº 491/2018 (IQAr).
+        Níveis de baixa umidade do ar — padrão INMET / Defesa Civil.
+        Focos de calor — INPE / Programa Queimadas.
+      </div>
+
+      <p class="rodape">Dados ambientais de temperatura, umidade, vento e qualidade do ar são estimativas de modelo (não medição de estação física). Limiares de alerta são editáveis por estação. Documento gerado automaticamente pelo SAD — Sentinela Defesa Civil.</p>
       </body></html>`
 
     const w = window.open('', '_blank')
@@ -145,9 +178,13 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
         </label>
         <button onClick={gerar} disabled={selecionadas.size === 0}
           className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm disabled:opacity-50">
-          <Printer size={18} /> Gerar Boletim ({selecionadas.size})
+          <Printer size={18} /> Gerar Boletim Ambiental ({selecionadas.size})
         </button>
       </div>
+
+      <p className="text-xs text-text-secondary mb-2 shrink-0">
+        Junta nível do rio, chuva, umidade, temperatura, sensação térmica e qualidade do ar (PM2,5/PM10), com a situação de cada indicador e as fontes citadas. Focos de calor têm boletim próprio — aqui entra só a contagem dos últimos 30 dias.
+      </p>
 
       <div className="flex-1 overflow-y-auto space-y-2">
         {estacoes.length === 0 ? (
@@ -162,7 +199,7 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
               <div className="min-w-0 flex-1">
                 <p className="font-bold text-sm">{e.nome}</p>
                 <p className="text-xs text-text-secondary">
-                  {ultimo ? `Última leitura: ${(ultimo.cota_cm / 100).toFixed(2)} m em ${dataBR(ultimo.data)}` : 'Sem leituras registradas'}
+                  {ultimo ? `Nível: ${(ultimo.cota_cm / 100).toFixed(2)} m em ${dataBR(ultimo.data)}` : 'Sem leituras de nível'}
                 </p>
               </div>
             </label>

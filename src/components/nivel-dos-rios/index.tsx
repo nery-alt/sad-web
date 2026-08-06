@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Waves, LayoutDashboard, Radio, ListPlus, LineChart, Printer, Route } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import type { Estacao, RegistroNivel, RegistroChuva, RegistroUmidade } from './types'
+import type { Estacao, RegistroNivel, RegistroChuva, RegistroUmidade, RegistroClima } from './types'
 import { Painel } from './Painel'
 import { Corredor } from './Corredor'
 import { Previsao } from './Previsao'
@@ -18,6 +18,8 @@ export const NivelDosRios: React.FC = () => {
   const [registrosNivel, setRegistrosNivel] = useState<RegistroNivel[]>([])
   const [registrosChuva, setRegistrosChuva] = useState<RegistroChuva[]>([])
   const [registrosUmidade, setRegistrosUmidade] = useState<RegistroUmidade[]>([])
+  const [registrosClima, setRegistrosClima] = useState<RegistroClima[]>([])
+  const [focos30, setFocos30] = useState(0)
   const [loading, setLoading] = useState(true)
 
   // O PostgREST costuma limitar a 1000 linhas por página — o histórico ANA sozinho tem
@@ -38,16 +40,22 @@ export const NivelDosRios: React.FC = () => {
 
   const carregar = useCallback(async () => {
     setLoading(true)
-    const [est, niv, chuva, umid] = await Promise.all([
+    const d30 = new Date(); d30.setDate(d30.getDate() - 30)
+    const d30s = d30.toISOString().slice(0, 10)
+    const [est, niv, chuva, umid, clima, focosCount] = await Promise.all([
       supabase.from('estacoes_monitoramento').select('*').order('nome', { ascending: true }).then(r => r.data as Estacao[] | null),
       carregarPaginado<RegistroNivel>('v_registros_nivel_situacao'),
       carregarPaginado<RegistroChuva>('registros_chuva'),
       carregarPaginado<RegistroUmidade>('registros_umidade'),
+      carregarPaginado<RegistroClima>('v_clima_situacao'),
+      supabase.from('focos_historico').select('*', { count: 'exact', head: true }).gte('data_foco', d30s).then(r => r.count ?? 0),
     ])
     if (est) setEstacoes(est)
     setRegistrosNivel(niv)
     setRegistrosChuva(chuva)
     setRegistrosUmidade(umid)
+    setRegistrosClima(clima)
+    setFocos30(focosCount)
     setLoading(false)
   }, [])
 
@@ -99,7 +107,7 @@ export const NivelDosRios: React.FC = () => {
         ) : aba === 'historico' ? (
           <Historico estacoes={estacoes} registrosNivel={registrosNivel} registrosChuva={registrosChuva} registrosUmidade={registrosUmidade} />
         ) : (
-          <Boletim estacoes={estacoes} registrosNivel={registrosNivel} registrosChuva={registrosChuva} registrosUmidade={registrosUmidade} />
+          <Boletim estacoes={estacoes} registrosNivel={registrosNivel} registrosChuva={registrosChuva} registrosUmidade={registrosUmidade} registrosClima={registrosClima} focos30={focos30} />
         )}
       </div>
     </div>

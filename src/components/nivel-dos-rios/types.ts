@@ -56,6 +56,26 @@ export interface RegistroUmidade {
   created_at: string
 }
 
+export interface RegistroClima {
+  estacao_id: string
+  data: string
+  variavel: string
+  valor: number
+  unidade: string | null
+  situacao: Situacao | null
+}
+
+export const CLIMA_LABEL: Record<string, string> = {
+  umidade_min: 'Umidade mínima do ar',
+  temperatura: 'Temperatura máxima',
+  sensacao_termica: 'Sensação térmica máxima',
+  vento: 'Vento máximo',
+  pm25: 'PM2,5 (material particulado fino)',
+  pm10: 'PM10 (material particulado)',
+}
+// Ordem de exibição no boletim
+export const CLIMA_ORDEM = ['umidade_min', 'temperatura', 'sensacao_termica', 'pm25', 'pm10', 'vento']
+
 export const TENDENCIA_LABEL: Record<Tendencia, string> = {
   estiagem: 'Estiagem',
   vazante: 'Vazante',
