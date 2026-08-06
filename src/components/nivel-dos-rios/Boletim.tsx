@@ -9,7 +9,7 @@ interface Props {
   registrosChuva: RegistroChuva[]
   registrosUmidade: RegistroUmidade[]
   registrosClima: RegistroClima[]
-  focos30: number
+  focosPorMun: Record<string, number>
 }
 
 const corSituacao = (s: Situacao | null | undefined) =>
@@ -28,7 +28,9 @@ function narrativa(nome: string, situacao: Situacao | null | undefined, tendenci
   return frase + '.'
 }
 
-export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosChuva, registrosUmidade, registrosClima, focos30 }) => {
+export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosChuva, registrosUmidade, registrosClima, focosPorMun }) => {
+  // Município da estação (extraído da localidade, ex.: "Tefé/AM - ..." → "TEFÉ").
+  const municipioDe = (e: Estacao) => (e.localidade || '').split('/')[0].trim().toUpperCase()
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set(estacoes.filter(e => e.ativa).map(e => e.id)))
 
   const toggle = (id: string) => setSelecionadas(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -112,6 +114,10 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
             ${clima.vars.map(v => `<tr><td>${CLIMA_LABEL[v.variavel] || v.variavel}</td><td>${v.valor}${v.unidade ? ' ' + v.unidade : ''}${v.situacao ? ` <span style="color:${corSituacao(v.situacao)};font-weight:bold">— ${SITUACAO_LABEL[v.situacao]}</span>` : ''}</td></tr>`).join('')}
           </table>` : ''}
 
+          ${focosPorMun[municipioDe(e)] != null
+            ? `<p class="focos-mun">Focos de calor no município nos últimos 30 dias: <b>${focosPorMun[municipioDe(e)]}</b> (fonte: INPE — ver Boletim de Focos).</p>`
+            : ''}
+
           ${(chuva.length > 0 || umid.length > 0) ? `
           <div class="clima-linha">
             ${chuva.length > 0 ? `<div><b>Chuva (últimos registros)</b><br>${chuva.map(c => `${dataBR(c.data)}: ${c.chuva_mm} mm`).join(' · ')}</div>` : ''}
@@ -126,7 +132,7 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
         h1{font-size:23px;font-weight:800;margin:0 0 2px}
         h2{font-size:13px;font-weight:normal;color:#444;margin:0 0 4px}
         .data{font-size:13px;color:#666;margin-bottom:8px;padding-bottom:8px;border-bottom:2px solid #1a1a1a}
-        .focos{font-size:13.5px;background:#fff4f2;border:1px solid #f2c8c0;border-radius:6px;padding:10px 12px;margin:12px 0 16px}
+        .focos-mun{font-size:13px;background:#fff4f2;border:1px solid #f2c8c0;border-radius:6px;padding:8px 10px;margin:10px 0 0}
         .estacao{border:1px solid #ccc;border-radius:8px;padding:16px 18px;margin-bottom:16px;page-break-inside:avoid}
         .cabecalho-estacao{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
         .nome-estacao{font-size:17px;font-weight:bold}
@@ -148,8 +154,6 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
       <h1>BOLETIM AMBIENTAL</h1>
       <h2>Secretaria Municipal de Defesa Civil e Patrimonial — SEMDECP · Tefé/AM</h2>
       <div class="data">Emitido em ${horaGeracao} · ${lista.length} estação(ões) monitorada(s)</div>
-
-      <div class="focos">Focos de calor na região nos <b>últimos 30 dias: ${focos30}</b> — detalhamento no Boletim de Focos de Calor (documento próprio).</div>
 
       ${blocos}
 
@@ -183,7 +187,7 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
       </div>
 
       <p className="text-xs text-text-secondary mb-2 shrink-0">
-        Junta nível do rio, chuva, umidade, temperatura, sensação térmica e qualidade do ar (PM2,5/PM10), com a situação de cada indicador e as fontes citadas. Focos de calor têm boletim próprio — aqui entra só a contagem dos últimos 30 dias.
+        Junta nível do rio, chuva, umidade, temperatura, sensação térmica e qualidade do ar (PM2,5/PM10), com a situação de cada indicador e as fontes citadas. Focos de calor têm boletim próprio — aqui entra só a contagem do município de cada estação (últimos 30 dias).
       </p>
 
       <div className="flex-1 overflow-y-auto space-y-2">
