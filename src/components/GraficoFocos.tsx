@@ -24,6 +24,10 @@ export const GraficoFocos: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [periodo, setPeriodo] = useState<Periodo>('dia')
   const [filtroMun, setFiltroMun] = useState<string>('todos')
+  // Filtro de intervalo de datas (o boletim e a tela respeitam este recorte)
+  const [filtroPeriodo, setFiltroPeriodo] = useState<'tudo' | '30d' | 'mes' | 'ano' | 'custom'>('tudo')
+  const [customDe, setCustomDe] = useState('')
+  const [customAte, setCustomAte] = useState('')
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -39,10 +43,31 @@ export const GraficoFocos: React.FC = () => {
 
   // Lista de municípios disponíveis (para o filtro)
   const municipios = [...new Set(registros.map(r => r.municipio).filter((m): m is string => !!m))].sort()
-  // Aplica o filtro de município tanto na tela quanto no boletim
-  const validos = registros.filter(r => r.data_foco && (filtroMun === 'todos' || (r.municipio || '') === filtroMun))
+
+  // Intervalo de datas conforme o filtro de período (default 'tudo' = sem restrição).
+  const isoHoje = new Date().toISOString().slice(0, 10)
+  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  const now = new Date()
+  let periodoIni = '0000-01-01', periodoFim = '9999-12-31'
+  if (filtroPeriodo === '30d') { const d = new Date(now); d.setDate(d.getDate() - 29); periodoIni = iso(d); periodoFim = isoHoje }
+  else if (filtroPeriodo === 'mes') { periodoIni = iso(new Date(now.getFullYear(), now.getMonth(), 1)); periodoFim = isoHoje }
+  else if (filtroPeriodo === 'ano') { periodoIni = `${now.getFullYear()}-01-01`; periodoFim = isoHoje }
+  else if (filtroPeriodo === 'custom') {
+    const de = customDe || '0000-01-01', ate = customAte || '9999-12-31'
+    periodoIni = de <= ate ? de : ate; periodoFim = de <= ate ? ate : de // tolera inversão
+  }
+
+  // Aplica município + período tanto na tela quanto no boletim.
+  const validos = registros.filter(r =>
+    r.data_foco &&
+    (filtroMun === 'todos' || (r.municipio || '') === filtroMun) &&
+    r.data_foco >= periodoIni && r.data_foco <= periodoFim
+  )
   const total = validos.length
   const escopoMun = filtroMun === 'todos' ? 'Todos os municípios' : filtroMun
+  const LABEL_PERIODO: Record<typeof filtroPeriodo, string> = {
+    tudo: 'Período completo', '30d': 'Últimos 30 dias', mes: 'Este mês', ano: 'Este ano', custom: 'Período personalizado',
+  }
 
   // Agrupa conforme o período escolhido
   const grupos = new Map<string, number>()
@@ -85,12 +110,6 @@ export const GraficoFocos: React.FC = () => {
     const datas = validos.map(r => r.data_foco!).sort()
     const primeiro = datas[0], ultimo = datas[datas.length - 1]
 
-    // Atividade recente (últimos 7 e 30 dias corridos)
-    const hojeD = new Date()
-    const dStr = (dias: number) => { const x = new Date(hojeD); x.setDate(x.getDate() - dias); return x.toISOString().split('T')[0] }
-    const ult7 = validos.filter(r => r.data_foco! >= dStr(7)).length
-    const ult30 = validos.filter(r => r.data_foco! >= dStr(30)).length
-
     // Por município
     const porMun = new Map<string, number>()
     for (const r of validos) { const m = (r.municipio || 'Não informado'); porMun.set(m, (porMun.get(m) || 0) + 1) }
@@ -110,6 +129,7 @@ export const GraficoFocos: React.FC = () => {
 
     // Pico do período (sobre todos os dias no escopo) e média
     const picoEntry = [...porDia.entries()].reduce((a, b) => b[1] > a[1] ? b : a, ['', 0] as [string, number])
+    const mediaDia = porDia.size ? Math.round(total / porDia.size) : 0
     const dataHoje = new Date().toLocaleDateString('pt-BR')
 
     // Número em PRETO e NEGRITO, FORA da barra (legível na impressão).
@@ -152,15 +172,15 @@ export const GraficoFocos: React.FC = () => {
       </style></head><body>
       <p class="titulo">BOLETIM DE FOCOS DE CALOR</p>
       <p class="sub">Secretaria Municipal de Defesa Civil e Patrimonial — SEMDECP · Tefé/AM</p>
-      <div class="meta"><b>Município:</b> ${escopoMun} &nbsp;·&nbsp; <b>Período dos dados:</b> ${diaBR(primeiro)} a ${diaBR(ultimo)} &nbsp;·&nbsp; <b>Emitido em:</b> ${horaGeracao}</div>
+      <div class="meta"><b>Município:</b> ${escopoMun} &nbsp;·&nbsp; <b>Recorte:</b> ${LABEL_PERIODO[filtroPeriodo]} &nbsp;·&nbsp; <b>Período dos dados:</b> ${diaBR(primeiro)} a ${diaBR(ultimo)} &nbsp;·&nbsp; <b>Emitido em:</b> ${horaGeracao}</div>
 
-      <p class="intro">No período de <b>${diaBR(primeiro)} a ${diaBR(ultimo)}</b> foram detectados <b>${total} focos de calor</b> em <b>${escopoMun}</b>, distribuídos em <b>${porDia.size} dia(s)</b> com registro.${picoEntry[1] > 0 ? ` O dia de maior atividade foi <b>${diaBR(picoEntry[0])}, com ${picoEntry[1]} focos</b>.` : ''} Nos <b>últimos 7 dias</b> registraram-se <b>${ult7} focos</b>. Recomenda-se atenção reforçada ao risco de incêndios e à qualidade do ar no período.</p>
+      <p class="intro">No período de <b>${diaBR(primeiro)} a ${diaBR(ultimo)}</b> foram detectados <b>${total} focos de calor</b> em <b>${escopoMun}</b>, distribuídos em <b>${porDia.size} dia(s)</b> com registro, uma média de <b>${mediaDia} foco(s) por dia</b> com atividade.${picoEntry[1] > 0 ? ` O dia de maior atividade foi <b>${diaBR(picoEntry[0])}, com ${picoEntry[1]} focos</b>.` : ''} Recomenda-se atenção reforçada ao risco de incêndios e à qualidade do ar no período.</p>
 
       <div class="cards">
-        <div class="card"><div class="n">${total}</div><div class="l">Focos no total</div></div>
-        <div class="card"><div class="n">${ult7}</div><div class="l">Últimos 7 dias</div></div>
-        <div class="card"><div class="n">${ult30}</div><div class="l">Últimos 30 dias</div></div>
+        <div class="card"><div class="n">${total}</div><div class="l">Focos no período</div></div>
         <div class="card"><div class="n">${porDia.size}</div><div class="l">Dias com foco</div></div>
+        <div class="card"><div class="n">${mediaDia}</div><div class="l">Média por dia</div></div>
+        <div class="card"><div class="n">${picoEntry[1]}</div><div class="l">Maior dia</div></div>
       </div>
 
       <h3>Atividade diária (últimos ${diaRows.length} dias com registro)</h3>
@@ -185,7 +205,7 @@ export const GraficoFocos: React.FC = () => {
         </div>
       </div>
 
-      <p class="rodape">Fonte: detecção por satélite (INPE / Programa Queimadas), coletada automaticamente todos os dias pelo SAD — Sentinela Defesa Civil. Os números podem ser subestimados em dias de forte nebulosidade. Documento gerado para subsídio ao Plano de Contingência.</p>
+      <p class="rodape">Fonte: detecção por satélite (INPE / Programa Queimadas), coletada automaticamente todos os dias pelo SAD — Sentinela Defesa Civil. Os números podem ser subestimados em dias de forte nebulosidade.</p>
       </body></html>`
 
     const w = window.open('', '_blank')
@@ -202,6 +222,22 @@ export const GraficoFocos: React.FC = () => {
           <p className="text-text-secondary text-sm">Contagem de focos detectados pelo INPE na região, ao longo do tempo.</p>
         </div>
         <div className="flex gap-2 items-center flex-wrap">
+          <select value={filtroPeriodo} onChange={e => setFiltroPeriodo(e.target.value as typeof filtroPeriodo)}
+            className="p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary-btn/20"
+            title="Recorte de período">
+            <option value="tudo">Período completo</option>
+            <option value="30d">Últimos 30 dias</option>
+            <option value="mes">Este mês</option>
+            <option value="ano">Este ano</option>
+            <option value="custom">Personalizado…</option>
+          </select>
+          {filtroPeriodo === 'custom' && (
+            <>
+              <input type="date" value={customDe} onChange={e => setCustomDe(e.target.value)} className="p-2 border border-gray-300 rounded-lg text-sm outline-none" title="Data inicial" />
+              <span className="text-text-secondary text-sm">a</span>
+              <input type="date" value={customAte} onChange={e => setCustomAte(e.target.value)} className="p-2 border border-gray-300 rounded-lg text-sm outline-none" title="Data final" />
+            </>
+          )}
           <select value={filtroMun} onChange={e => setFiltroMun(e.target.value)}
             className="p-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary-btn/20"
             title="Filtrar por município">
