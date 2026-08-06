@@ -108,57 +108,84 @@ export const GraficoFocos: React.FC = () => {
     const mesRows = [...porMes.entries()].sort((a, b) => a[0].localeCompare(b[0]))
     const rotuloMes = (k: string) => { const [a, m] = k.split('-'); return `${MESES[Number(m) - 1]}/${a}` }
 
-    const linhaBarra = (label: string, valor: number, max: number, pico: boolean) =>
-      `<div class="barra-linha"><span class="barra-lbl">${label}</span><span class="barra-track"><span class="barra-fill" style="width:${Math.max(6, (valor / max) * 100)}%;background:${pico ? '#7f1d1d' : '#DC2626'}">${valor}</span></span>${pico ? '<span class="pico">◄ maior do período</span>' : ''}</div>`
+    // Pico do período (sobre todos os dias no escopo) e média
+    const picoEntry = [...porDia.entries()].reduce((a, b) => b[1] > a[1] ? b : a, ['', 0] as [string, number])
+    const dataHoje = new Date().toLocaleDateString('pt-BR')
 
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Boletim de Focos de Calor</title>
+    // Número em PRETO e NEGRITO, FORA da barra (legível na impressão).
+    const linhaBarra = (label: string, valor: number, max: number, pico: boolean) =>
+      `<div class="barra"><span class="dia">${label}</span><span class="trilho"><span class="fill${pico ? ' pico' : ''}" style="width:${Math.max(3, (valor / max) * 100)}%"></span></span><span class="num">${valor}${pico ? ' <span class="pico-tag">◄ maior</span>' : ''}</span></div>`
+
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Boletim de Focos de Calor</title>
       <style>
-        body{font-family:Arial,sans-serif;font-size:12px;margin:24px;color:#111}
-        h1{font-size:18px;margin:0 0 2px}
-        h2{font-size:12px;font-weight:normal;color:#555;margin:0 0 4px}
-        .data{font-size:11px;color:#777;margin-bottom:16px}
-        .cards{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
-        .card{border:1px solid #ddd;border-radius:8px;padding:8px 14px;min-width:110px}
-        .card b{display:block;font-size:22px;color:#DC2626}
-        .card span{font-size:10px;color:#666;text-transform:uppercase}
-        h3{font-size:13px;margin:18px 0 6px;border-bottom:2px solid #eee;padding-bottom:3px}
-        table{width:100%;border-collapse:collapse;margin-bottom:4px}
-        td,th{padding:4px 6px;border-bottom:1px solid #eee;text-align:left;font-size:11px}
-        th{color:#555;text-transform:uppercase;font-size:10px}
-        td:last-child,th:last-child{text-align:right}
-        .barra-linha{display:flex;align-items:center;gap:8px;margin:3px 0}
-        .barra-lbl{width:70px;font-size:10px;color:#555;text-align:right}
-        .barra-track{flex:1;background:#f1f1f1;border-radius:4px;height:16px;overflow:hidden}
-        .barra-fill{display:flex;align-items:center;justify-content:flex-end;height:100%;padding-right:5px;color:#fff;font-size:10px;font-weight:bold;border-radius:4px}
-        .pico{font-size:10px;color:#7f1d1d;font-weight:bold;white-space:nowrap}
-        .rodape{margin-top:20px;font-size:10px;color:#999}
+        @page{margin:18mm 16mm}
+        *{box-sizing:border-box}
+        body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#1a1a1a;margin:24px;line-height:1.45}
+        .titulo{font-size:20px;font-weight:800;letter-spacing:.5px;margin:0}
+        .sub{font-size:11px;color:#444;margin:2px 0 0}
+        .meta{font-size:11px;color:#555;margin-top:6px;padding-bottom:10px;border-bottom:2px solid #1a1a1a}
+        .meta b{color:#1a1a1a}
+        .intro{margin:14px 0 18px;text-align:justify}
+        .cards{display:flex;gap:10px;margin:14px 0 20px}
+        .card{flex:1;border:1px solid #d0d0d0;border-radius:6px;padding:10px 12px;text-align:center}
+        .card .n{font-size:24px;font-weight:800;color:#b3261e}
+        .card .l{font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+        h3{font-size:13px;text-transform:uppercase;letter-spacing:.6px;margin:22px 0 10px;padding-bottom:4px;border-bottom:1.5px solid #ccc;color:#222}
+        .barra{display:flex;align-items:center;gap:10px;margin:4px 0}
+        .barra .dia{width:82px;font-size:11px;color:#333;text-align:right}
+        .barra .trilho{flex:1;background:#f0f0f0;border-radius:3px;height:15px;overflow:hidden}
+        .barra .fill{height:100%;background:#c0392b;border-radius:3px}
+        .barra .fill.pico{background:#7d1710}
+        .barra .num{width:78px;font-size:12px;font-weight:800;color:#111}
+        .barra .pico-tag{color:#7d1710;font-weight:700;font-size:10px}
+        table{width:100%;border-collapse:collapse;margin-top:4px}
+        th{text-align:left;font-size:10px;text-transform:uppercase;color:#555;padding:6px 8px;border-bottom:2px solid #ccc}
+        td{padding:6px 8px;font-size:12px;border-bottom:1px solid #eee}
+        td.r,th.r{text-align:right}
+        tr:nth-child(even) td{background:#fafafa}
+        .assinatura{margin-top:56px;text-align:center}
+        .assinatura .linha{display:inline-block;border-top:1px solid #333;padding-top:5px;min-width:320px}
+        .assinatura .nome{font-weight:700}
+        .assinatura .cargo{font-size:11px;color:#555}
+        .rodape{margin-top:26px;padding-top:8px;border-top:1px solid #ddd;font-size:10px;color:#888}
         @media print{body{margin:12px}}
       </style></head><body>
-      <h1>Boletim de Focos de Calor</h1>
-      <h2>Secretaria Municipal de Defesa Civil e Patrimonial — SEMDECP — Tefé/AM</h2>
-      <div class="data">Gerado em ${horaGeracao} · Município: <b>${escopoMun}</b> · Período dos dados: ${diaBR(primeiro)} a ${diaBR(ultimo)}</div>
+      <p class="titulo">BOLETIM DE FOCOS DE CALOR</p>
+      <p class="sub">Secretaria Municipal de Defesa Civil e Patrimonial — SEMDECP · Tefé/AM</p>
+      <div class="meta"><b>Município:</b> ${escopoMun} &nbsp;·&nbsp; <b>Período dos dados:</b> ${diaBR(primeiro)} a ${diaBR(ultimo)} &nbsp;·&nbsp; <b>Emitido em:</b> ${horaGeracao}</div>
+
+      <p class="intro">No período de <b>${diaBR(primeiro)} a ${diaBR(ultimo)}</b> foram detectados <b>${total} focos de calor</b> em <b>${escopoMun}</b>, distribuídos em <b>${porDia.size} dia(s)</b> com registro.${picoEntry[1] > 0 ? ` O dia de maior atividade foi <b>${diaBR(picoEntry[0])}, com ${picoEntry[1]} focos</b>.` : ''} Nos <b>últimos 7 dias</b> registraram-se <b>${ult7} focos</b>. Recomenda-se atenção reforçada ao risco de incêndios e à qualidade do ar no período.</p>
 
       <div class="cards">
-        <div class="card"><b>${total}</b><span>Focos no total</span></div>
-        <div class="card"><b>${ult7}</b><span>Últimos 7 dias</span></div>
-        <div class="card"><b>${ult30}</b><span>Últimos 30 dias</span></div>
-        <div class="card"><b>${porDia.size}</b><span>Dias com foco</span></div>
+        <div class="card"><div class="n">${total}</div><div class="l">Focos no total</div></div>
+        <div class="card"><div class="n">${ult7}</div><div class="l">Últimos 7 dias</div></div>
+        <div class="card"><div class="n">${ult30}</div><div class="l">Últimos 30 dias</div></div>
+        <div class="card"><div class="n">${porDia.size}</div><div class="l">Dias com foco</div></div>
       </div>
 
       <h3>Atividade diária (últimos ${diaRows.length} dias com registro)</h3>
       ${diaRows.map(([d, v]) => linhaBarra(diaBR(d), v, maxDia, v === maxDia)).join('')}
 
-      ${filtroMun === 'todos' ? `<h3>Por município</h3>
-      <table><tr><th>Município</th><th>Focos</th></tr>
-        ${munRows.map(([m, v]) => `<tr><td>${m}</td><td>${v}</td></tr>`).join('')}
+      ${filtroMun === 'todos' ? `<h3>Distribuição por município</h3>
+      <table><tr><th>Município</th><th class="r">Focos</th></tr>
+        ${munRows.map(([m, v]) => `<tr><td>${m}</td><td class="r">${v}</td></tr>`).join('')}
       </table>` : ''}
 
-      <h3>Por mês</h3>
-      <table><tr><th>Mês</th><th>Focos</th></tr>
-        ${mesRows.map(([k, v]) => `<tr><td>${rotuloMes(k)}</td><td>${v}</td></tr>`).join('')}
+      <h3>Distribuição por mês</h3>
+      <table><tr><th>Mês</th><th class="r">Focos</th></tr>
+        ${mesRows.map(([k, v]) => `<tr><td>${rotuloMes(k)}</td><td class="r">${v}</td></tr>`).join('')}
+        <tr><td><b>Total</b></td><td class="r"><b>${total}</b></td></tr>
       </table>
 
-      <p class="rodape">Fonte: detecção por satélite (INPE / Programa Queimadas), coletada automaticamente todos os dias pelo SAD. Os números podem ser subestimados em dias de forte nebulosidade. Documento gerado automaticamente pelo SAD — Sentinela Defesa Civil.</p>
+      <div class="assinatura">
+        <div class="linha">
+          <div class="nome">Rêumano Nery da Silva</div>
+          <div class="cargo">Chefe do Setor de Vistoria — SEMDECP</div>
+          <div class="cargo">Tefé/AM, ${dataHoje}</div>
+        </div>
+      </div>
+
+      <p class="rodape">Fonte: detecção por satélite (INPE / Programa Queimadas), coletada automaticamente todos os dias pelo SAD — Sentinela Defesa Civil. Os números podem ser subestimados em dias de forte nebulosidade. Documento gerado para subsídio ao Plano de Contingência.</p>
       </body></html>`
 
     const w = window.open('', '_blank')
