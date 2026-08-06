@@ -122,26 +122,26 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
 
     const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Boletim Ambiental</title>
       <style>
-        body{font-family:Arial,Helvetica,sans-serif;font-size:12px;margin:24px;color:#1a1a1a;line-height:1.45}
-        h1{font-size:19px;font-weight:800;margin:0 0 2px}
-        h2{font-size:11px;font-weight:normal;color:#444;margin:0 0 4px}
-        .data{font-size:11px;color:#666;margin-bottom:8px;padding-bottom:8px;border-bottom:2px solid #1a1a1a}
-        .focos{font-size:11px;background:#fff4f2;border:1px solid #f2c8c0;border-radius:6px;padding:8px 10px;margin:12px 0 16px}
-        .estacao{border:1px solid #ccc;border-radius:8px;padding:14px 16px;margin-bottom:14px;page-break-inside:avoid}
+        body{font-family:Arial,Helvetica,sans-serif;font-size:14px;margin:24px;color:#1a1a1a;line-height:1.5}
+        h1{font-size:23px;font-weight:800;margin:0 0 2px}
+        h2{font-size:13px;font-weight:normal;color:#444;margin:0 0 4px}
+        .data{font-size:13px;color:#666;margin-bottom:8px;padding-bottom:8px;border-bottom:2px solid #1a1a1a}
+        .focos{font-size:13.5px;background:#fff4f2;border:1px solid #f2c8c0;border-radius:6px;padding:10px 12px;margin:12px 0 16px}
+        .estacao{border:1px solid #ccc;border-radius:8px;padding:16px 18px;margin-bottom:16px;page-break-inside:avoid}
         .cabecalho-estacao{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
-        .nome-estacao{font-size:15px;font-weight:bold}
-        .sub{font-size:11px;color:#666}
-        .badge{font-size:10px;font-weight:bold;padding:3px 8px;border-radius:4px;white-space:nowrap}
-        .resumo{width:100%;border-collapse:collapse;margin:6px 0}
-        .resumo td{padding:4px 0;border-bottom:1px solid #eee}
+        .nome-estacao{font-size:17px;font-weight:bold}
+        .sub{font-size:13px;color:#666}
+        .badge{font-size:12px;font-weight:bold;padding:4px 9px;border-radius:4px;white-space:nowrap}
+        .resumo{width:100%;border-collapse:collapse;margin:8px 0}
+        .resumo td{padding:5px 0;border-bottom:1px solid #eee;font-size:14px}
         .resumo td:first-child{color:#555;width:55%}
         .resumo td:last-child{text-align:right;font-weight:600}
-        .narrativa{margin:8px 0;line-height:1.5;font-style:italic;color:#333}
-        .secao{font-size:11px;color:#333;font-weight:bold;margin:12px 0 4px}
-        .clima-linha{display:flex;gap:24px;font-size:11px;color:#444;margin-top:8px;border-top:1px solid #eee;padding-top:8px}
-        .vazio{font-size:11px;color:#888;font-style:italic}
-        .fontes{margin-top:22px;padding:10px 12px;background:#fafafa;border:1px solid #e5e5e5;border-radius:6px;font-size:10px;color:#555;line-height:1.5}
-        .rodape{margin-top:14px;font-size:10px;color:#999}
+        .narrativa{margin:10px 0;line-height:1.55;font-style:italic;color:#333;font-size:14px}
+        .secao{font-size:14px;color:#111;font-weight:bold;margin:14px 0 4px}
+        .clima-linha{display:flex;gap:24px;font-size:13px;color:#444;margin-top:8px;border-top:1px solid #eee;padding-top:8px}
+        .vazio{font-size:13px;color:#888;font-style:italic}
+        .fontes{margin-top:22px;padding:12px 14px;background:#fafafa;border:1px solid #e5e5e5;border-radius:6px;font-size:12px;color:#555;line-height:1.55}
+        .rodape{margin-top:14px;font-size:11.5px;color:#999}
         @media print{body{margin:12px}}
       </style>
       </head><body>

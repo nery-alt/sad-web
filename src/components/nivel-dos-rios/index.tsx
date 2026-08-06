@@ -94,7 +94,7 @@ export const NivelDosRios: React.FC = () => {
         {loading ? (
           <p className="text-text-secondary text-sm italic p-4">Carregando...</p>
         ) : aba === 'painel' ? (
-          <Painel estacoes={estacoes} registrosNivel={registrosNivel} registrosChuva={registrosChuva} registrosUmidade={registrosUmidade} irPara={setAba} />
+          <Painel estacoes={estacoes} registrosNivel={registrosNivel} registrosChuva={registrosChuva} registrosUmidade={registrosUmidade} registrosClima={registrosClima} irPara={setAba} />
         ) : aba === 'corredor' ? (
           <div className="h-full overflow-y-auto space-y-4">
             <Previsao estacoes={estacoes} registrosNivel={registrosNivel} />

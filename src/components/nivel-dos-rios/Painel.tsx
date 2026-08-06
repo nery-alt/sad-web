@@ -1,18 +1,32 @@
 import React from 'react'
 import { Radio, TrendingUp, TrendingDown, Minus, ArrowUpRight, ArrowDownRight, CloudRain, Droplets, AlertTriangle } from 'lucide-react'
-import type { Estacao, RegistroNivel, RegistroChuva, RegistroUmidade, Situacao } from './types'
-import { SITUACAO_LABEL, SITUACAO_COR, TENDENCIA_LABEL, dataBR } from './types'
+import type { Estacao, RegistroNivel, RegistroChuva, RegistroUmidade, RegistroClima, Situacao } from './types'
+import { SITUACAO_LABEL, SITUACAO_COR, TENDENCIA_LABEL, CLIMA_LABEL, CLIMA_ORDEM, dataBR } from './types'
 
 interface Props {
   estacoes: Estacao[]
   registrosNivel: RegistroNivel[]
   registrosChuva: RegistroChuva[]
   registrosUmidade: RegistroUmidade[]
+  registrosClima: RegistroClima[]
   irPara: (aba: 'estacoes' | 'registros' | 'historico' | 'boletim' | 'painel') => void
 }
 
-export const Painel: React.FC<Props> = ({ estacoes, registrosNivel, registrosChuva, registrosUmidade, irPara }) => {
+// Rótulos curtos para os chips do painel
+const CLIMA_CURTO: Record<string, string> = {
+  umidade_min: 'Umid. mín', temperatura: 'Temp', sensacao_termica: 'Sensação', vento: 'Vento', pm25: 'PM2,5', pm10: 'PM10',
+}
+
+export const Painel: React.FC<Props> = ({ estacoes, registrosNivel, registrosChuva, registrosUmidade, registrosClima, irPara }) => {
   const ativas = estacoes.filter(e => e.ativa)
+
+  const climaDe = (estacaoId: string) => {
+    const rows = registrosClima.filter(r => r.estacao_id === estacaoId)
+    if (!rows.length) return null
+    const ultimaData = rows.reduce((m, r) => r.data > m ? r.data : m, rows[0].data)
+    const vars = rows.filter(r => r.data === ultimaData).sort((a, b) => CLIMA_ORDEM.indexOf(a.variavel) - CLIMA_ORDEM.indexOf(b.variavel))
+    return { data: ultimaData, vars }
+  }
 
   const doisMaisRecentes = (estacaoId: string) => {
     const lista = registrosNivel.filter(r => r.estacao_id === estacaoId)
@@ -111,6 +125,28 @@ export const Painel: React.FC<Props> = ({ estacoes, registrosNivel, registrosChu
                     {umid && <span className="flex items-center gap-1"><Droplets size={13} /> {umid.umidade_pct}% ({dataBR(umid.data)})</span>}
                   </div>
                 )}
+
+                {(() => {
+                  const cl = climaDe(e.id)
+                  if (!cl) return null
+                  return (
+                    <div className="border-t border-gray-100 pt-2 mt-1">
+                      <p className="text-[10px] text-text-secondary uppercase font-bold mb-1">Ambiente ({dataBR(cl.data)})</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {cl.vars.map(v => {
+                          const cor = v.situacao ? SITUACAO_COR[v.situacao] : null
+                          return (
+                            <span key={v.variavel}
+                              className={`text-[11px] px-1.5 py-0.5 rounded border ${cor ? `${cor.bg} ${cor.text} border-transparent font-bold` : 'border-gray-200 text-text-secondary'}`}
+                              title={CLIMA_LABEL[v.variavel] || v.variavel}>
+                              {CLIMA_CURTO[v.variavel] || v.variavel}: {v.valor}{v.unidade ? ` ${v.unidade}` : ''}{v.situacao ? ` · ${SITUACAO_LABEL[v.situacao]}` : ''}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {semLimiar && (
                   <p className="text-[11px] text-deadline-alert italic">Sem limiares de atenção/alerta/emergência configurados.</p>
