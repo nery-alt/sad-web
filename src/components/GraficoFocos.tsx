@@ -31,11 +31,23 @@ export const GraficoFocos: React.FC = () => {
 
   const carregar = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('focos_historico')
-      .select('data_foco, municipio')
-      .order('data_foco', { ascending: true })
-    setRegistros((data as Registro[]) || [])
+    // O PostgREST corta em 1000 linhas por requisição. Como a tabela de focos já passou
+    // disso, paginamos com .range() até esgotar — senão os dias mais recentes somem da tela.
+    const pagina = 1000
+    let de = 0
+    let tudo: Registro[] = []
+    for (;;) {
+      const { data, error } = await supabase
+        .from('focos_historico')
+        .select('data_foco, municipio')
+        .order('data_foco', { ascending: true })
+        .range(de, de + pagina - 1)
+      if (error || !data) break
+      tudo = tudo.concat(data as Registro[])
+      if (data.length < pagina) break
+      de += pagina
+    }
+    setRegistros(tudo)
     setLoading(false)
   }, [])
 
