@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Plus, ArrowLeft, History, Send, Trash2, Search, Edit2, Phone, MapPin, CreditCard, CheckSquare, ExternalLink, X } from 'lucide-react'
 import type { Protocolo, Pessoa, Movimentacao, Tarefa, Encaminhamento } from '../types'
 import { supabase } from '../lib/supabase'
@@ -64,6 +64,8 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
   formatDate, getPrazoStatus,
 }) => {
   const [searchProtocolo, setSearchProtocolo] = useState('')
+  const [buscaPessoa, setBuscaPessoa] = useState('')
+  const [mostrarListaPessoas, setMostrarListaPessoas] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [formData, setFormData] = useState<Protocolo>({
     pessoa_id: 0, numero: '', assunto: '', descricao: '',
@@ -85,6 +87,25 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
     (p.pessoa_nome || '').toLowerCase().includes(searchProtocolo.toLowerCase())
   ), [protocolos, searchProtocolo])
 
+  // Lista de pessoas filtrada pela busca (nome ou CPF) — usada no seletor do formulário.
+  const pessoasFiltradas = useMemo(() => {
+    const termo = buscaPessoa.trim().toLowerCase()
+    if (!termo) return pessoas.slice(0, 8)
+    return pessoas.filter(p =>
+      p.nome.toLowerCase().includes(termo) ||
+      (p.cpf || '').toLowerCase().includes(termo)
+    ).slice(0, 8)
+  }, [pessoas, buscaPessoa])
+
+  // Ao abrir o formulário, preenche o campo de busca com o nome da pessoa já vinculada (edição).
+  useEffect(() => {
+    if (isFormOpen) {
+      const p = pessoas.find(x => x.id === formData.pessoa_id)
+      setBuscaPessoa(p?.nome || '')
+      setMostrarListaPessoas(false)
+    }
+  }, [isFormOpen])
+
   const protocoloTarefas = useMemo(() =>
     !selectedProtocolo ? [] : tarefas.filter(t => t.protocolo_id === selectedProtocolo.id)
   , [tarefas, selectedProtocolo])
@@ -97,6 +118,10 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!formData.pessoa_id) {
+      alert('Selecione a pessoa (interessado) do protocolo.')
+      return
+    }
     let dados = formData
     // Protocolo NOVO e sem número digitado -> pega o proximo da fila central
     // SOMENTE agora, na hora de salvar (cancelar nao consome numero).
@@ -159,12 +184,39 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
         </div>
         <form onSubmit={handleSave} className="p-4 overflow-y-auto space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="relative">
               <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Pessoa *</label>
-              <select required className="w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none" value={formData.pessoa_id} onChange={e => setFormData({...formData, pessoa_id: parseInt(e.target.value)})}>
-                <option value="">Selecione</option>
-                {pessoas.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" size={15} />
+                <input
+                  type="text"
+                  placeholder="Digite nome ou CPF..."
+                  className="w-full pl-8 pr-8 p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none"
+                  value={buscaPessoa}
+                  onChange={e => { setBuscaPessoa(e.target.value); setMostrarListaPessoas(true); if (formData.pessoa_id) setFormData({...formData, pessoa_id: 0}) }}
+                  onFocus={() => setMostrarListaPessoas(true)}
+                />
+                {formData.pessoa_id ? (
+                  <button type="button" onClick={() => { setFormData({...formData, pessoa_id: 0}); setBuscaPessoa(''); setMostrarListaPessoas(true) }} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-secondary hover:text-error-expired"><X size={15} /></button>
+                ) : null}
+              </div>
+              {mostrarListaPessoas && (
+                <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-52 overflow-y-auto">
+                  {pessoasFiltradas.length === 0 ? (
+                    <p className="p-2 text-xs text-text-secondary italic">Nenhuma pessoa encontrada.</p>
+                  ) : pessoasFiltradas.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => { setFormData({...formData, pessoa_id: p.id!}); setBuscaPessoa(p.nome); setMostrarListaPessoas(false) }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-primary-btn/5 border-b border-gray-50 last:border-0"
+                    >
+                      <span className="font-bold">{p.nome}</span>
+                      {p.cpf && <span className="text-xs text-text-secondary ml-2">{p.cpf}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Número</label>
@@ -277,6 +329,9 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
                   )}
                   {selectedProtocolo.pessoa_endereco && (
                     <div className="col-span-2 flex items-start gap-2"><MapPin size={13} className="text-primary-btn shrink-0 mt-0.5" /><div><p className="text-xs font-bold text-text-secondary uppercase mb-0.5">Endereço</p><p>{selectedProtocolo.pessoa_endereco}</p></div></div>
+                  )}
+                  {selectedProtocolo.pessoa_observacoes && (
+                    <div className="col-span-2 bg-white/60 border border-primary-btn/10 rounded p-2"><p className="text-xs font-bold text-text-secondary uppercase mb-0.5">Observações do Cadastro (Pessoas)</p><p className="whitespace-pre-line">{selectedProtocolo.pessoa_observacoes}</p></div>
                   )}
                   {selectedProtocolo.descricao && (
                     <div className="col-span-2"><p className="text-xs font-bold text-text-secondary uppercase mb-0.5">Descrição</p><p>{selectedProtocolo.descricao}</p></div>

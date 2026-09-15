@@ -106,7 +106,7 @@ const App: React.FC = () => {
 
     const { data: pr } = await supabase
       .from('protocolos')
-      .select('*, pessoa:pessoas(nome, endereco, telefone, cpf)')
+      .select('*, pessoa:pessoas(nome, endereco, telefone, cpf, observacoes)')
       .order('criado_em', { ascending: false })
     if (pr) setProtocolos(pr.map((r: any) => ({
       ...r,
@@ -115,6 +115,7 @@ const App: React.FC = () => {
       pessoa_endereco: r.pessoa?.endereco,
       pessoa_telefone: r.pessoa?.telefone,
       pessoa_cpf: r.pessoa?.cpf,
+      pessoa_observacoes: r.pessoa?.observacoes,
     })))
 
     const { data: enc } = await supabase
@@ -264,9 +265,30 @@ const App: React.FC = () => {
     return false
   }
 
+  // Status da pessoa usa "em_aberto"; o protocolo usa "aberto". O resto é igual.
+  const statusPessoaParaProtocolo = (s: string) => (s === 'em_aberto' ? 'aberto' : s)
+  const LABEL_STATUS_PESSOA: Record<string, string> = {
+    em_aberto: 'Em aberto', em_andamento: 'Em andamento', concluido: 'Concluído', arquivado: 'Arquivado',
+  }
+
+  // Espelha o status da pessoa nos protocolos dela. Confirma, porque uma pessoa pode ter vários.
+  const cascatearStatusProtocolos = async (pessoaId: number, statusPessoa: string) => {
+    const alvo = statusPessoaParaProtocolo(statusPessoa)
+    const daPessoa = protocolos.filter(p => p.pessoa_id === pessoaId)
+    if (daPessoa.length === 0 || daPessoa.every(p => p.status === alvo)) return
+    const label = LABEL_STATUS_PESSOA[statusPessoa] || statusPessoa
+    const quantos = daPessoa.length === 1 ? 'o protocolo desta pessoa' : `os ${daPessoa.length} protocolos desta pessoa`
+    if (!window.confirm(`Aplicar o status "${label}" também a ${quantos}?`)) return
+    const now = new Date().toISOString()
+    setProtocolos(prev => prev.map(p => p.pessoa_id === pessoaId ? { ...p, status: alvo as Protocolo['status'] } : p))
+    setSelectedProtocolo(prev => (prev && prev.pessoa_id === pessoaId) ? { ...prev, status: alvo as Protocolo['status'] } : prev)
+    await supabase.from('protocolos').update({ status: alvo, atualizado_em: now }).eq('pessoa_id', pessoaId)
+  }
+
   const handleSavePessoa = async (pessoa: Pessoa) => {
     if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
+    const anterior = pessoa.id ? pessoas.find(p => p.id === pessoa.id) : null
     if (pessoa.id) {
       await supabase.from('pessoas').update({ ...pessoa, atualizado_em: now }).eq('id', pessoa.id)
       setSelectedPessoa(prev => prev?.id === pessoa.id ? { ...prev, ...pessoa, atualizado_em: now } : prev)
@@ -275,6 +297,10 @@ const App: React.FC = () => {
     }
     // Recarrega a lista na hora (não depende do realtime chegar).
     fetchData()
+    // Se o status da pessoa mudou na edição, oferece espelhar nos protocolos dela.
+    if (pessoa.id && anterior && anterior.status_ocorrencia !== pessoa.status_ocorrencia && pessoa.status_ocorrencia) {
+      await cascatearStatusProtocolos(pessoa.id, pessoa.status_ocorrencia)
+    }
   }
 
   const handleUpdatePessoaStatus = async (id: number, status: string) => {
@@ -283,6 +309,7 @@ const App: React.FC = () => {
     setPessoas(prev => prev.map(p => p.id === id ? { ...p, status_ocorrencia: status as Pessoa['status_ocorrencia'], atualizado_em: now } : p))
     setSelectedPessoa(prev => prev?.id === id ? { ...prev, status_ocorrencia: status as Pessoa['status_ocorrencia'], atualizado_em: now } : prev)
     await supabase.from('pessoas').update({ status_ocorrencia: status, atualizado_em: now }).eq('id', id)
+    await cascatearStatusProtocolos(id, status)
   }
 
   const handleDeletePessoa = async (id: number) => {
@@ -356,7 +383,7 @@ const App: React.FC = () => {
   const handleSaveProtocolo = async (protocolo: Protocolo) => {
     if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
-    const { pessoa_nome, pessoa_endereco, pessoa_telefone, pessoa_cpf, criado_em, atualizado_em, id, ...data } = protocolo
+    const { pessoa_nome, pessoa_endereco, pessoa_telefone, pessoa_cpf, pessoa_observacoes, criado_em, atualizado_em, id, ...data } = protocolo
     const historico = typeof data.historico === 'string' ? JSON.parse(data.historico || '[]') : data.historico
     const payload = { ...data, historico, data_entrada: data.data_entrada || null, prazo: data.prazo || null }
     if (protocolo.id) {

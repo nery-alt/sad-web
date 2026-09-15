@@ -52,6 +52,7 @@ export interface Protocolo {
   pessoa_endereco?: string
   pessoa_telefone?: string
   pessoa_cpf?: string
+  pessoa_observacoes?: string
 }
 
 export interface Encaminhamento {
