@@ -43,7 +43,7 @@ const VAZIO: Partial<Alvara> = {
   matricula_vistoriador: '0000',
 }
 
-const fmt = (v: any) => (v === null || v === undefined || v === '') ? '—' : String(v)
+const fmt = (v: unknown) => (v === null || v === undefined || v === '') ? '—' : String(v)
 const dataBR = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—'
 
 export const Alvaras: React.FC = () => {
@@ -108,8 +108,8 @@ export const Alvaras: React.FC = () => {
       }
       fecharForm()
       carregar()
-    } catch (e: any) {
-      alert('Erro ao salvar: ' + (e?.message || e))
+    } catch (e) {
+      alert('Erro ao salvar: ' + (e instanceof Error ? e.message : String(e)))
     } finally {
       setSalvando(false)
     }
@@ -137,8 +137,8 @@ export const Alvaras: React.FC = () => {
       const { data: pub } = supabase.storage.from('documentos').getPublicUrl(path)
       await supabase.from('alvara_anexos').insert({ alvara_id: anexarId, nome: file.name, url: pub.publicUrl })
       carregar()
-    } catch (err: any) {
-      alert('Não foi possível anexar: ' + (err?.message || err))
+    } catch (err) {
+      alert('Não foi possível anexar: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setUploadingId(null)
       setAnexarId(null)
@@ -147,14 +147,16 @@ export const Alvaras: React.FC = () => {
 
   const anexosDe = (id: number) => anexos.filter(x => x.alvara_id === id)
   const removerAnexo = async (anexo: Anexo) => {
-    if (!window.confirm(`Remover \"${anexo.nome}\"?`)) return
+    if (!window.confirm(`Remover "${anexo.nome}"?`)) return
     await supabase.from('alvara_anexos').delete().eq('id', anexo.id)
     carregar()
   }
 
   // ---------- Seleção / impressão ----------
   const toggleSel = (id: number) => setSelecionados(prev => {
-    const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n
+    const n = new Set(prev)
+    if (n.has(id)) n.delete(id); else n.add(id)
+    return n
   })
   const todosMarcados = filtrados.length > 0 && filtrados.every(a => selecionados.has(a.id))
   const toggleTodos = () => {
@@ -190,7 +192,7 @@ export const Alvaras: React.FC = () => {
   const imprimirUm = (a: Alvara) => {
     const hoje = new Date().toLocaleDateString('pt-BR')
     const cor = a.situacao_imovel === 'Liberado' ? '#166534' : a.situacao_imovel === 'Não liberado' ? '#991b1b' : '#92400e'
-    const linha = (lbl: string, val: any) => (val === null || val === undefined || val === '') ? '' : `<div class="row"><span class="lbl">${lbl}</span><span class="val">${val}</span></div>`
+    const linha = (lbl: string, val: unknown) => (val === null || val === undefined || val === '') ? '' : `<div class="row"><span class="lbl">${lbl}</span><span class="val">${val}</span></div>`
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Alvará ${a.numero || ''}</title>
       <style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px;color:#111}h2{font-size:16px;margin:0}h3{font-size:12px;font-weight:normal;color:#555;margin:2px 0 14px}.nome{font-size:15px;font-weight:bold;margin:10px 0 4px}.sit{font-weight:bold}.row{display:flex;justify-content:space-between;gap:16px;padding:5px 0;border-bottom:1px solid #eee}.lbl{color:#555}.val{text-align:right;font-weight:500}.bloco{margin-top:14px;line-height:1.5}.bloco b{display:block;color:#555;font-size:11px;text-transform:uppercase;margin-bottom:3px}.ass{margin-top:50px;text-align:center}.ass div{display:inline-block;border-top:1px solid #000;padding-top:4px;min-width:60%}@media print{body{margin:12px}}</style>
       </head><body>
@@ -345,7 +347,7 @@ export const Alvaras: React.FC = () => {
                 ['Data da Vistoria', dataBR(verAlvara.data_vistoria)],
                 ['Vistoriador', verAlvara.nome_vistoriador],
                 ['Matrícula', verAlvara.matricula_vistoriador],
-              ] as [string, any][]).map(([label, val]) => (
+              ] as [string, unknown][]).map(([label, val]) => (
                 <div key={label} className="flex justify-between gap-4 py-1.5 border-b border-gray-100">
                   <span className="text-text-secondary">{label}</span>
                   <span className="text-right font-medium">{fmt(val)}</span>

@@ -30,7 +30,7 @@ import type {
   Movimentacao,
   Encaminhamento,
 } from './types'
-import type { Session } from '@supabase/supabase-js'
+import type { Session, RealtimeChannel } from '@supabase/supabase-js'
 
 const BUCKET = 'documentos'
 
@@ -69,7 +69,7 @@ const App: React.FC = () => {
     nomeUsuario: '', nomeSetor: '', cargo: '', logomarca: '', assinaturaPadrao: '', cidade: '', uf: ''
   })
 
-  const channelRef = useRef<any>(null)
+  const channelRef = useRef<RealtimeChannel | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -110,7 +110,7 @@ const App: React.FC = () => {
       .select('*, pessoa:pessoas(nome, endereco, telefone, cpf, observacoes)')
       .order('criado_em', { ascending: false })
     if (prError) console.error('Erro ao carregar protocolos:', prError)
-    else if (pr) setProtocolos(pr.map((r: any) => ({
+    else if (pr) setProtocolos((pr as Array<Protocolo & { pessoa: Pick<Pessoa, 'nome' | 'endereco' | 'telefone' | 'cpf' | 'observacoes'> | null }>).map(r => ({
       ...r,
       historico: typeof r.historico === 'string' ? r.historico : JSON.stringify(r.historico ?? []),
       pessoa_nome: r.pessoa?.nome,
@@ -131,7 +131,7 @@ const App: React.FC = () => {
       .from('documentos_recebidos')
       .select('*, pessoa:pessoas(nome), protocolo:protocolos(numero)')
       .order('criado_em', { ascending: false })
-    if (dr) setDocumentos(dr.map((r: any) => ({
+    if (dr) setDocumentos((dr as Array<DocumentoRecebido & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(r => ({
       ...r, pessoa_nome: r.pessoa?.nome, protocolo_numero: r.protocolo?.numero
     })))
 
@@ -139,7 +139,7 @@ const App: React.FC = () => {
       .from('documentos_gerados')
       .select('*, pessoa:pessoas(nome), protocolo:protocolos(numero)')
       .order('criado_em', { ascending: false })
-    if (dg) setDocumentosGerados(dg.map((r: any) => ({
+    if (dg) setDocumentosGerados((dg as Array<DocumentoGerado & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(r => ({
       ...r, pessoa_nome: r.pessoa?.nome, protocolo_numero: r.protocolo?.numero
     })))
 
@@ -147,7 +147,7 @@ const App: React.FC = () => {
       .from('tarefas')
       .select('*, pessoa:pessoas(nome), protocolo:protocolos(numero)')
       .order('prazo')
-    if (t) setTarefas(t.map((r: any) => ({
+    if (t) setTarefas((t as Array<Tarefa & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(r => ({
       ...r, pessoa_nome: r.pessoa?.nome, protocolo_numero: r.protocolo?.numero
     })))
 
@@ -155,7 +155,7 @@ const App: React.FC = () => {
       .from('agenda')
       .select('*, pessoa:pessoas(nome), protocolo:protocolos(numero)')
       .order('data').order('horario')
-    if (ag) setAgenda(ag.map((r: any) => ({
+    if (ag) setAgenda((ag as Array<AgendaItem & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(r => ({
       ...r, pessoa_nome: r.pessoa?.nome, protocolo_numero: r.protocolo?.numero
     })))
   }, [])
@@ -166,8 +166,8 @@ const App: React.FC = () => {
       const newConfig: Config = {
         nomeUsuario: '', nomeSetor: '', cargo: '', logomarca: '', assinaturaPadrao: '', cidade: '', uf: ''
       }
-      data.forEach((item: any) => {
-        if (item.chave in newConfig) (newConfig as any)[item.chave] = item.valor
+      data.forEach((item: { chave: string; valor: string }) => {
+        if (item.chave in newConfig) newConfig[item.chave as keyof Config] = item.valor
       })
       setConfig(newConfig)
     }
@@ -368,7 +368,9 @@ const App: React.FC = () => {
           const storagePath = decodeURIComponent(pathParts[1].split('?')[0])
           await supabase.storage.from(BUCKET).remove([storagePath])
         }
-      } catch { }
+      } catch {
+        // best-effort: mesmo se falhar ao remover do storage, segue removendo o registro
+      }
     }
     await supabase.from('documentos_recebidos').delete().eq('id', id)
   }

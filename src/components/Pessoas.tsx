@@ -121,7 +121,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
     e.stopPropagation()
     setSelecionadas(prev => {
       const novo = new Set(prev)
-      novo.has(id) ? novo.delete(id) : novo.add(id)
+      if (novo.has(id)) novo.delete(id); else novo.add(id)
       return novo
     })
   }

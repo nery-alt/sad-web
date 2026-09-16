@@ -85,8 +85,8 @@ export const GraficoFocos: React.FC = () => {
   const grupos = new Map<string, number>()
   for (const r of validos) {
     const d = new Date(r.data_foco + 'T12:00:00')
-    let chave = ''
-    let ordem = ''
+    let chave: string
+    let ordem: string
     if (periodo === 'dia') {
       chave = `${String(d.getDate()).padStart(2, '0')}/${MESES[d.getMonth()]}`
       ordem = r.data_foco!

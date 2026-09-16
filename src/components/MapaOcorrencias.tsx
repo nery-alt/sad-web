@@ -75,7 +75,7 @@ const corDoFoco = (risco: number | null): string => {
   return '#f59e0b'
 }
 
-const esc = (s: any) =>
+const esc = (s: unknown) =>
   String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -94,15 +94,15 @@ const labelTipo = (o: Ocorrencia) =>
 export const MapaOcorrencias: React.FC = () => {
   const mapDivRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
-  const clusterRef = useRef<any>(null)
-  const focosLayerRef = useRef<any>(null)
+  const clusterRef = useRef<L.MarkerClusterGroup | null>(null)
+  const focosLayerRef = useRef<L.LayerGroup | null>(null)
 
   const [focos, setFocos] = useState<Foco[]>([])
   const [mostrarFocos, setMostrarFocos] = useState(false)
   const [focosLoading, setFocosLoading] = useState(false)
   const [focosInfo, setFocosInfo] = useState<{ total: number; atualizado_em: string } | null>(null)
   const [focosErro, setFocosErro] = useState<string | null>(null)
-  const comunidadesLayerRef = useRef<any>(null)
+  const comunidadesLayerRef = useRef<L.LayerGroup | null>(null)
   const [comunidades, setComunidades] = useState<Comunidade[]>([])
   const [mostrarComunidades, setMostrarComunidades] = useState(false)
 
@@ -142,7 +142,7 @@ export const MapaOcorrencias: React.FC = () => {
       attribution: '&copy; OpenStreetMap',
       maxZoom: 19,
     }).addTo(map)
-    const cluster = (L as any).markerClusterGroup({ maxClusterRadius: 50 })
+    const cluster = L.markerClusterGroup({ maxClusterRadius: 50 })
     map.addLayer(cluster)
     mapRef.current = map
     clusterRef.current = cluster
@@ -251,8 +251,8 @@ export const MapaOcorrencias: React.FC = () => {
         }))
         supabase.from('focos_historico').upsert(rows, { onConflict: 'chave', ignoreDuplicates: true }).then(() => {})
       }
-    } catch (e: any) {
-      setFocosErro(e?.message || 'Falha ao buscar focos do INPE')
+    } catch (e) {
+      setFocosErro(e instanceof Error ? e.message : 'Falha ao buscar focos do INPE')
       setFocos([])
     } finally {
       setFocosLoading(false)
@@ -282,7 +282,7 @@ export const MapaOcorrencias: React.FC = () => {
       const circ = L.circleMarker([f.lat, f.lon], {
         radius: 9, color: cor, weight: 1, fillColor: cor, fillOpacity: 0.4,
       })
-      const linha = (rot: string, val: any) =>
+      const linha = (rot: string, val: unknown) =>
         (val === null || val === undefined || val === '') ? '' :
         `<div style="font-size:12px;"><b>${rot}:</b> ${esc(val)}</div>`
       const dh = f.data_hora ? esc(f.data_hora.replace('T', ' ').slice(0, 16)) + ' GMT' : '—'
@@ -327,7 +327,7 @@ export const MapaOcorrencias: React.FC = () => {
         iconAnchor: [15, 30],
         popupAnchor: [0, -30],
       })
-      const linha = (rot: string, val: any) =>
+      const linha = (rot: string, val: unknown) =>
         (val === null || val === undefined || val === '') ? '' :
         `<div style="font-size:12px;"><b>${rot}:</b> ${esc(val)}</div>`
       const pessoas = [

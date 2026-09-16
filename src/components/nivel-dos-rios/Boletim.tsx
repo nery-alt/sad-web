@@ -45,7 +45,11 @@ export const Boletim: React.FC<Props> = ({ estacoes, registrosNivel, registrosCh
   }
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set(estacoes.filter(e => e.ativa).map(e => e.id)))
 
-  const toggle = (id: string) => setSelecionadas(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggle = (id: string) => setSelecionadas(prev => {
+    const n = new Set(prev)
+    if (n.has(id)) n.delete(id); else n.add(id)
+    return n
+  })
   const todasMarcadas = estacoes.length > 0 && estacoes.every(e => selecionadas.has(e.id))
   const toggleTodas = () => setSelecionadas(todasMarcadas ? new Set() : new Set(estacoes.map(e => e.id)))
 

@@ -38,8 +38,9 @@ export const Estacoes: React.FC<Props> = ({ estacoes, recarregar }) => {
     const { data } = await supabase.from('limiares_clima').select('*').eq('estacao_id', e.id)
     const s = (n: number | null | undefined) => (n == null ? '' : String(n))
     const map: Record<string, LimVal> = {}
+    type LimiarRow = { variavel: string; atencao: number | null; alerta: number | null; emergencia: number | null }
     for (const vc of VARS_CLIMA) {
-      const row = (data as any[] | null)?.find(r => r.variavel === vc.v)
+      const row = (data as LimiarRow[] | null)?.find(r => r.variavel === vc.v)
       map[vc.v] = row
         ? { atencao: s(row.atencao), alerta: s(row.alerta), emergencia: s(row.emergencia) }
         : { atencao: s(vc.def[0]), alerta: s(vc.def[1]), emergencia: s(vc.def[2]) }
@@ -68,8 +69,8 @@ export const Estacoes: React.FC<Props> = ({ estacoes, recarregar }) => {
       if (error) throw error
       setLimEstacao(null)
       recarregar()
-    } catch (e: any) {
-      alert('Erro ao salvar limiares: ' + (e?.message || e))
+    } catch (e) {
+      alert('Erro ao salvar limiares: ' + (e instanceof Error ? e.message : String(e)))
     } finally {
       setLimSaving(false)
     }
@@ -104,8 +105,8 @@ export const Estacoes: React.FC<Props> = ({ estacoes, recarregar }) => {
     setSalvando(true)
     try {
       const payload = { ...form }
-      delete (payload as any).id
-      delete (payload as any).created_at
+      delete payload.id
+      delete payload.created_at
       if (editId) {
         await supabase.from('estacoes_monitoramento').update(payload).eq('id', editId)
       } else {
@@ -113,8 +114,8 @@ export const Estacoes: React.FC<Props> = ({ estacoes, recarregar }) => {
       }
       fecharForm()
       recarregar()
-    } catch (e: any) {
-      alert('Erro ao salvar: ' + (e?.message || e))
+    } catch (e) {
+      alert('Erro ao salvar: ' + (e instanceof Error ? e.message : String(e)))
     } finally {
       setSalvando(false)
     }

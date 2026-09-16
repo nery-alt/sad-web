@@ -29,7 +29,7 @@ interface Anexo {
 }
 
 const VAZIO: Partial<Comunidade> = {}
-const fmt = (v: any) => (v === null || v === undefined || v === '') ? '—' : String(v)
+const fmt = (v: unknown) => (v === null || v === undefined || v === '') ? '—' : String(v)
 
 export const Comunidades: React.FC = () => {
   const [lista, setLista] = useState<Comunidade[]>([])
@@ -94,8 +94,8 @@ export const Comunidades: React.FC = () => {
     setSalvando(true)
     try {
       const payload = { ...form }
-      delete (payload as any).id
-      delete (payload as any).criado_em
+      delete payload.id
+      delete payload.criado_em
       if (editId) {
         await supabase.from('comunidades').update(payload).eq('id', editId)
       } else {
@@ -103,8 +103,8 @@ export const Comunidades: React.FC = () => {
       }
       fecharForm()
       carregar()
-    } catch (e: any) {
-      alert('Erro ao salvar: ' + (e?.message || e))
+    } catch (e) {
+      alert('Erro ao salvar: ' + (e instanceof Error ? e.message : String(e)))
     } finally {
       setSalvando(false)
     }
@@ -131,8 +131,8 @@ export const Comunidades: React.FC = () => {
       const { data: pub } = supabase.storage.from('documentos').getPublicUrl(path)
       await supabase.from('comunidade_anexos').insert({ comunidade_id: anexarId, nome: file.name, url: pub.publicUrl })
       carregar()
-    } catch (err: any) {
-      alert('Não foi possível anexar: ' + (err?.message || err))
+    } catch (err) {
+      alert('Não foi possível anexar: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setUploadingId(null)
       setAnexarId(null)
@@ -230,7 +230,7 @@ export const Comunidades: React.FC = () => {
                 ['Tipo de Motor', verCom.tipo_motor],
                 ['Duração da Viagem', verCom.duracao_viagem],
                 ['Coordenada', (verCom.gps_lat != null && verCom.gps_lng != null) ? `${verCom.gps_lat}, ${verCom.gps_lng}` : null],
-              ] as [string, any][]).map(([label, val]) => (
+              ] as [string, unknown][]).map(([label, val]) => (
                 <div key={label} className="flex justify-between gap-4 py-1.5 border-b border-gray-100">
                   <span className="text-text-secondary">{label}</span>
                   <span className="text-right font-medium">{fmt(val)}</span>

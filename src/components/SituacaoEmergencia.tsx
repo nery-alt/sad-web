@@ -24,7 +24,7 @@ const fmtData = (s: string | null) => {
 }
 const labelTipo = (o: Ocorrencia) =>
   o.tipificacao === 'Outros' && o.tipificacao_outro ? o.tipificacao_outro : (o.tipificacao || '—')
-const esc = (s: any) =>
+const esc = (s: unknown) =>
   String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 export const SituacaoEmergencia: React.FC = () => {

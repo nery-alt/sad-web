@@ -37,7 +37,6 @@ export const Tarefas: React.FC<TarefasProps> = ({
   newTarefaInit,
   onClearNewTarefaInit,
   formatDate,
-  getPrazoStatus: _getPrazoStatus,
 }) => {
   const [searchTarefa, setSearchTarefa] = useState('')
   const [filterStatus, setFilterStatus] = useState('todos')

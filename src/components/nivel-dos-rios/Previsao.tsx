@@ -61,7 +61,7 @@ function tendencia(m: Map<string, number>) {
   const ini = m.get(jan[0])!, fim = m.get(jan[jan.length - 1])!
   const dias = jan.length - 1
   const cmDia = Math.round((fim - ini) / dias)
-  return { cmDia, dir: cmDia > 1 ? 'subindo' : cmDia < -1 ? 'baixando' : 'estavel' as any }
+  return { cmDia, dir: (cmDia > 1 ? 'subindo' : cmDia < -1 ? 'baixando' : 'estavel') as 'subindo' | 'baixando' | 'estavel' }
 }
 
 export const Previsao: React.FC<Props> = ({ estacoes, registrosNivel }) => {

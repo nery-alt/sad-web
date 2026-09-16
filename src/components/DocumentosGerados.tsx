@@ -14,11 +14,8 @@ interface DocumentosGeradosProps {
 
 export const DocumentosGerados: React.FC<DocumentosGeradosProps> = ({
   documentosGerados,
-  pessoas: _pessoas,
   onOpenFile,
   onDeleteDocGerado,
-  onSelectPessoa: _onSelectPessoa,
-  onNavigate: _onNavigate,
   formatDate,
 }) => {
   const [searchDoc, setSearchDoc] = useState('')

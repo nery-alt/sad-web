@@ -94,14 +94,15 @@ export const Registros: React.FC<Props> = ({ estacoes, registrosNivel, registros
       }
       fecharForm()
       recarregar()
-    } catch (e: any) {
-      alert('Erro ao salvar: ' + (e?.message || e) + (e?.message?.includes('duplicate') ? '\n\nJá existe um registro dessa fonte para essa estação e data.' : ''))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      alert('Erro ao salvar: ' + msg + (msg.includes('duplicate') ? '\n\nJá existe um registro dessa fonte para essa estação e data.' : ''))
     } finally {
       setSalvando(false)
     }
   }
 
-  const excluir = async (r: any) => {
+  const excluir = async (r: { id: string; data: string }) => {
     if (!window.confirm(`Excluir o registro de ${dataBR(r.data)}?`)) return
     await supabase.from(tabela).delete().eq('id', r.id)
     recarregar()

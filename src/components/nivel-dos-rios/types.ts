@@ -122,4 +122,4 @@ export function calcularSituacao(cota_cm: number, estacao: Estacao): Situacao | 
 }
 
 export const dataBR = (d: string | null | undefined) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—'
-export const fmt = (v: any) => (v === null || v === undefined || v === '') ? '—' : String(v)
+export const fmt = (v: unknown) => (v === null || v === undefined || v === '') ? '—' : String(v)
