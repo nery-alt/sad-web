@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Plus, ArrowLeft, History, Send, Trash2, Search, Edit2, Phone, MapPin, CreditCard, CheckSquare, ExternalLink, X } from 'lucide-react'
 import type { Protocolo, Pessoa, Movimentacao, Tarefa, Encaminhamento } from '../types'
 import { supabase } from '../lib/supabase'
@@ -66,6 +66,18 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
   const [searchProtocolo, setSearchProtocolo] = useState('')
   const [buscaPessoa, setBuscaPessoa] = useState('')
   const [mostrarListaPessoas, setMostrarListaPessoas] = useState(false)
+  const buscaPessoaRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!mostrarListaPessoas) return
+    const onClickFora = (e: MouseEvent) => {
+      if (buscaPessoaRef.current && !buscaPessoaRef.current.contains(e.target as Node)) {
+        setMostrarListaPessoas(false)
+      }
+    }
+    document.addEventListener('mousedown', onClickFora)
+    return () => document.removeEventListener('mousedown', onClickFora)
+  }, [mostrarListaPessoas])
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [formData, setFormData] = useState<Protocolo>({
     pessoa_id: 0, numero: '', assunto: '', descricao: '',
@@ -184,7 +196,7 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
         </div>
         <form onSubmit={handleSave} className="p-4 overflow-y-auto space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div className="relative">
+            <div className="relative" ref={buscaPessoaRef}>
               <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Pessoa *</label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" size={15} />

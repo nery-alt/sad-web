@@ -101,14 +101,16 @@ const App: React.FC = () => {
   }, [session])
 
   const fetchData = useCallback(async () => {
-    const { data: p } = await supabase.from('pessoas').select('*').order('nome')
-    if (p) setPessoas(p)
+    const { data: p, error: pError } = await supabase.from('pessoas').select('*').order('nome')
+    if (pError) console.error('Erro ao carregar pessoas:', pError)
+    else if (p) setPessoas(p)
 
-    const { data: pr } = await supabase
+    const { data: pr, error: prError } = await supabase
       .from('protocolos')
       .select('*, pessoa:pessoas(nome, endereco, telefone, cpf, observacoes)')
       .order('criado_em', { ascending: false })
-    if (pr) setProtocolos(pr.map((r: any) => ({
+    if (prError) console.error('Erro ao carregar protocolos:', prError)
+    else if (pr) setProtocolos(pr.map((r: any) => ({
       ...r,
       historico: typeof r.historico === 'string' ? r.historico : JSON.stringify(r.historico ?? []),
       pessoa_nome: r.pessoa?.nome,
@@ -118,11 +120,12 @@ const App: React.FC = () => {
       pessoa_observacoes: r.pessoa?.observacoes,
     })))
 
-    const { data: enc } = await supabase
+    const { data: enc, error: encError } = await supabase
       .from('encaminhamentos')
       .select('*')
       .order('criado_em', { ascending: false })
-    if (enc) setEncaminhamentos(enc)
+    if (encError) console.error('Erro ao carregar encaminhamentos:', encError)
+    else if (enc) setEncaminhamentos(enc)
 
     const { data: dr } = await supabase
       .from('documentos_recebidos')
