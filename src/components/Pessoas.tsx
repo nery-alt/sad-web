@@ -258,7 +258,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
 
   // JSX do formulário inline — NÃO extraído como sub-componente para evitar remount a cada render
   const formularioJSX = (
-    <form onSubmit={handleSavePessoa} className="p-4 overflow-y-auto space-y-4">
+    <form onSubmit={handleSavePessoa} onKeyDown={e => { if (e.key === 'Enter' && e.target instanceof HTMLInputElement) e.preventDefault() }} className="p-4 overflow-y-auto space-y-4">
       <SecaoForm titulo="Identificação">
         <Campo label="Nome *" span2>
           <input required className={inputCls} value={pessoaFormData.nome} onChange={e => setF({ nome: e.target.value })} />

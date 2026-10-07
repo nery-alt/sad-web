@@ -292,11 +292,14 @@ const App: React.FC = () => {
     if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
     const anterior = pessoa.id ? pessoas.find(p => p.id === pessoa.id) : null
+    // Propaga o erro do Supabase para o formulário manter o rascunho em vez de fechar
     if (pessoa.id) {
-      await supabase.from('pessoas').update({ ...pessoa, atualizado_em: now }).eq('id', pessoa.id)
+      const { error } = await supabase.from('pessoas').update({ ...pessoa, atualizado_em: now }).eq('id', pessoa.id)
+      if (error) throw error
       setSelectedPessoa(prev => prev?.id === pessoa.id ? { ...prev, ...pessoa, atualizado_em: now } : prev)
     } else {
-      await supabase.from('pessoas').insert({ ...pessoa, criado_em: now, atualizado_em: now })
+      const { error } = await supabase.from('pessoas').insert({ ...pessoa, criado_em: now, atualizado_em: now })
+      if (error) throw error
     }
     // Recarrega a lista na hora (não depende do realtime chegar).
     fetchData()
