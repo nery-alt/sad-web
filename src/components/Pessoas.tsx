@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useLayoutEffect, useRef, useCallback } from 'react'
+import React, { useState, useMemo, useLayoutEffect, useEffect, useRef, useCallback } from 'react'
 import { Plus, ArrowLeft, Edit, Trash2, Building2, MapPin, FileText, Inbox, FilePlus, ExternalLink, Search, CheckSquare, Upload, Loader, Printer } from 'lucide-react'
 import type { Pessoa, Protocolo, DocumentoRecebido, DocumentoGerado, Tarefa } from '../types'
 
@@ -10,7 +10,7 @@ interface PessoasProps {
   tarefas: Tarefa[]
   selectedPessoa: Pessoa | null
   onSelectPessoa: (pessoa: Pessoa | null) => void
-  onSavePessoa: (pessoa: Pessoa) => void
+  onSavePessoa: (pessoa: Pessoa) => void | Promise<void>
   onDeletePessoa: (id: number) => void
   onUpdateStatus: (id: number, status: string) => void
   onImportDoc: (pessoaId: number, file: File) => Promise<void>
@@ -31,6 +31,19 @@ const PESSOA_VAZIA: Pessoa = {
   tipo_moradia: '', material_construcao: '', area_risco: undefined,
   deficiencia: '', doenca_cronica: '', prioridade: '',
   observacoes: '', status_ocorrencia: 'em_aberto', criado_em: '', atualizado_em: ''
+}
+
+// Rascunho do formulário no localStorage — protege contra perda de dados se o form fechar sem querer
+const DRAFT_PREFIX = 'sad_pessoas_draft_'
+const draftKey = (p: Pessoa) => `${DRAFT_PREFIX}${p.id ?? 'novo'}`
+const lerRascunho = (key: string): Pessoa | null => {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) as Pessoa : null } catch { return null }
+}
+const gravarRascunho = (key: string, p: Pessoa) => {
+  try { localStorage.setItem(key, JSON.stringify(p)) } catch { /* storage cheio/bloqueado */ }
+}
+const apagarRascunho = (key: string) => {
+  try { localStorage.removeItem(key) } catch { /* storage bloqueado */ }
 }
 
 const inputCls = "w-full p-2 bg-surface-card border border-gray-200 rounded text-sm focus:ring-2 focus:ring-primary-btn/20 outline-none"
@@ -68,6 +81,67 @@ export const Pessoas: React.FC<PessoasProps> = ({
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set())
   const [pessoaFormData, setPessoaFormData] = useState<Pessoa>({ ...PESSOA_VAZIA })
 
+  // Estado do formulário espelhado em refs para os handlers de unmount/beforeunload
+  const baselineRef = useRef('')
+  const formOpenRef = useRef(false)
+  const formDataRef = useRef(pessoaFormData)
+  const salvandoRef = useRef(false)
+  useLayoutEffect(() => {
+    formOpenRef.current = isPessoaFormOpen
+    formDataRef.current = pessoaFormData
+  }, [isPessoaFormOpen, pessoaFormData])
+
+  const formAlterado = useCallback(() => formOpenRef.current && JSON.stringify(formDataRef.current) !== baselineRef.current, [])
+
+  const persistirRascunho = useCallback(() => {
+    if (!formOpenRef.current) return
+    const key = draftKey(formDataRef.current)
+    if (formAlterado()) gravarRascunho(key, formDataRef.current)
+    else apagarRascunho(key)
+  }, [formAlterado])
+
+  // Autosave com debounce enquanto o formulário está aberto
+  useEffect(() => {
+    if (!isPessoaFormOpen) return
+    const t = setTimeout(persistirRascunho, 600)
+    return () => clearTimeout(t)
+  }, [isPessoaFormOpen, pessoaFormData, persistirRascunho])
+
+  // Grava o rascunho se o componente desmontar (ex.: troca de aba) antes do debounce disparar
+  useEffect(() => () => persistirRascunho(), [persistirRascunho])
+
+  // Pede confirmação do navegador antes de fechar/recarregar a aba com alterações não salvas
+  useEffect(() => {
+    if (!isPessoaFormOpen) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!formAlterado()) return
+      persistirRascunho()
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isPessoaFormOpen, formAlterado, persistirRascunho])
+
+  const abrirFormulario = (base: Pessoa) => {
+    const key = draftKey(base)
+    const rascunho = lerRascunho(key)
+    let dados = base
+    if (rascunho) {
+      if (window.confirm('Encontramos um cadastro não finalizado. Deseja continuar de onde parou?')) dados = { ...base, ...rascunho, id: base.id }
+      else apagarRascunho(key)
+    }
+    baselineRef.current = JSON.stringify(base)
+    setPessoaFormData(dados)
+    setIsPessoaFormOpen(true)
+  }
+
+  const fecharFormulario = () => {
+    if (formAlterado() && !window.confirm('Você tem alterações não salvas. Deseja mesmo sair sem salvar?')) return
+    apagarRascunho(draftKey(pessoaFormData))
+    setIsPessoaFormOpen(false)
+  }
+
   const listRef = useRef<HTMLDivElement>(null)
   const savedScrollRef = useRef(0)
 
@@ -99,8 +173,18 @@ export const Pessoas: React.FC<PessoasProps> = ({
 
   const handleSavePessoa = async (e: React.FormEvent) => {
     e.preventDefault()
-    onSavePessoa(pessoaFormData)
-    setIsPessoaFormOpen(false)
+    if (salvandoRef.current) return
+    salvandoRef.current = true
+    try {
+      await onSavePessoa(pessoaFormData)
+      apagarRascunho(draftKey(pessoaFormData))
+      setIsPessoaFormOpen(false)
+    } catch (err) {
+      console.error('Erro ao salvar pessoa:', err)
+      alert('Não foi possível salvar. Seus dados continuam no formulário (rascunho preservado).')
+    } finally {
+      salvandoRef.current = false
+    }
   }
 
   const handleImportClick = () => {
@@ -297,7 +381,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
       </SecaoForm>
 
       <div className="flex justify-end gap-3 pt-2 sticky bottom-0 bg-white pb-2">
-        <button type="button" onClick={() => setIsPessoaFormOpen(false)} className="px-4 py-2 text-text-secondary font-bold hover:text-text-main text-sm">Cancelar</button>
+        <button type="button" onClick={fecharFormulario} className="px-4 py-2 text-text-secondary font-bold hover:text-text-main text-sm">Cancelar</button>
         <button type="submit" className="px-6 py-2 bg-primary-btn text-white rounded font-bold hover:opacity-90 text-sm">Salvar</button>
       </div>
     </form>
@@ -329,7 +413,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
                 <option value="arquivado">Arquivado</option>
               </select>
             </div>
-            <button onClick={() => { setPessoaFormData({ ...PESSOA_VAZIA, ...selectedPessoa }); setIsPessoaFormOpen(true) }} className="flex items-center gap-1 px-3 py-1.5 bg-primary-btn text-white rounded-lg hover:opacity-90 text-sm"><Edit size={16} /> Editar</button>
+            <button onClick={() => abrirFormulario({ ...PESSOA_VAZIA, ...selectedPessoa })} className="flex items-center gap-1 px-3 py-1.5 bg-primary-btn text-white rounded-lg hover:opacity-90 text-sm"><Edit size={16} /> Editar</button>
             <button onClick={() => onDeletePessoa(selectedPessoa.id!)} className="flex items-center gap-1 px-3 py-1.5 bg-error-expired text-white rounded-lg hover:opacity-90 text-sm"><Trash2 size={16} /> Excluir</button>
           </div>
         </div>
@@ -453,7 +537,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
             <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
               <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-surface-card">
                 <h2 className="text-lg font-bold">Editar Pessoa</h2>
-                <button onClick={() => setIsPessoaFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button>
+                <button onClick={fecharFormulario} className="text-text-secondary hover:text-text-main">✕</button>
               </div>
               {formularioJSX}
             </div>
@@ -477,7 +561,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
           <button onClick={handleImprimirRoteiro} className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm">
             <Printer size={16} /> {selecionadas.size > 0 ? `Imprimir (${selecionadas.size})` : 'Imprimir Roteiro'}
           </button>
-          <button onClick={() => { setPessoaFormData({ ...PESSOA_VAZIA }); setIsPessoaFormOpen(true) }} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm">
+          <button onClick={() => abrirFormulario({ ...PESSOA_VAZIA })} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm">
             <Plus size={18} /> Nova Pessoa
           </button>
         </div>
@@ -513,7 +597,7 @@ export const Pessoas: React.FC<PessoasProps> = ({
           <div className="bg-white w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-surface-card">
               <h2 className="text-lg font-bold">Nova Pessoa</h2>
-              <button onClick={() => setIsPessoaFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button>
+              <button onClick={fecharFormulario} className="text-text-secondary hover:text-text-main">✕</button>
             </div>
             {formularioJSX}
           </div>
