@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { Home, Plus, Search, Pencil, Trash2, Paperclip, FileText, X } from 'lucide-react'
+import { Home, Plus, Search, Pencil, Trash2, Paperclip, FileText, X, Upload } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { ImportarComunidades } from './ImportarComunidades'
 
 interface Comunidade {
   id: number
@@ -43,6 +44,7 @@ export const Comunidades: React.FC = () => {
   const [coordCola, setCoordCola] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [verCom, setVerCom] = useState<Comunidade | null>(null)
+  const [showImport, setShowImport] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [anexarId, setAnexarId] = useState<number | null>(null)
@@ -157,9 +159,14 @@ export const Comunidades: React.FC = () => {
           <h1 className="text-2xl font-bold flex items-center gap-2"><Home size={24} /> Comunidades</h1>
           <p className="text-text-secondary text-sm">Cadastro das comunidades do município: localização, deslocamento e presidência.</p>
         </div>
-        <button onClick={abrirNovo} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm">
-          <Plus size={18} /> Nova Comunidade
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowImport(true)} className="flex items-center gap-2 border border-gray-200 bg-white px-4 py-2 rounded-lg font-bold hover:bg-gray-50 text-sm">
+            <Upload size={18} /> Importar
+          </button>
+          <button onClick={abrirNovo} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm">
+            <Plus size={18} /> Nova Comunidade
+          </button>
+        </div>
       </div>
 
       {/* Busca */}
@@ -209,6 +216,10 @@ export const Comunidades: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {showImport && (
+        <ImportarComunidades existentes={lista} onClose={() => setShowImport(false)} onConcluido={carregar} />
+      )}
 
       {/* Modal visualizar */}
       {verCom && (
