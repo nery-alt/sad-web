@@ -19,6 +19,8 @@ interface Comunidade {
   presidente_cpf: string | null
   observacoes: string | null
   criado_em: string
+  calha: string | null
+  isolada_estiagem: boolean | null
 }
 
 interface Anexo {
@@ -37,6 +39,8 @@ export const Comunidades: React.FC = () => {
   const [anexos, setAnexos] = useState<Anexo[]>([])
   const [loading, setLoading] = useState(true)
   const [filtro, setFiltro] = useState('')
+  const [filtroCalha, setFiltroCalha] = useState('')
+  const [soIsoladas, setSoIsoladas] = useState(false)
 
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
@@ -63,12 +67,20 @@ export const Comunidades: React.FC = () => {
 
   const anexosDe = (id: number) => anexos.filter(x => x.comunidade_id === id)
 
+  const calhas = Array.from(new Set(lista.map(c => c.calha).filter((x): x is string => !!x))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+
   const filtrados = lista.filter(c => {
     const b = filtro.toLowerCase()
+    if (filtroCalha && (c.calha || '') !== filtroCalha) return false
+    if (soIsoladas && !c.isolada_estiagem) return false
     return !b ||
       (c.nome || '').toLowerCase().includes(b) ||
-      (c.presidente_nome || '').toLowerCase().includes(b)
+      (c.presidente_nome || '').toLowerCase().includes(b) ||
+      (c.calha || '').toLowerCase().includes(b)
   })
+  const totalFamilias = filtrados.reduce((s, c) => s + (c.qtd_familias || 0), 0)
+  const totalIsoladas = filtrados.filter(c => c.isolada_estiagem).length
+  const semCoord = filtrados.filter(c => c.gps_lat == null || c.gps_lng == null).length
 
   // ---------- Formulário ----------
   const abrirNovo = () => { setEditId(null); setForm({ ...VAZIO }); setCoordCola(''); setShowForm(true) }
@@ -176,6 +188,22 @@ export const Comunidades: React.FC = () => {
           placeholder="Buscar por comunidade ou presidente..."
           value={filtro} onChange={e => setFiltro(e.target.value)} />
       </div>
+      <div className="flex flex-wrap items-center gap-2 mb-3 shrink-0 text-sm">
+        <select value={filtroCalha} onChange={e => setFiltroCalha(e.target.value)}
+          className="px-2 py-1.5 border border-gray-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-primary-btn/20">
+          <option value="">Todas as calhas</option>
+          {calhas.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+          <input type="checkbox" checked={soIsoladas} onChange={e => setSoIsoladas(e.target.checked)} />
+          Só as que ficam isoladas na estiagem
+        </label>
+        {!loading && (
+          <span className="text-text-secondary text-xs ml-auto">
+            {filtrados.length} comunidades · {totalFamilias.toLocaleString('pt-BR')} famílias · {totalIsoladas} isoladas na estiagem · {semCoord} sem coordenada
+          </span>
+        )}
+      </div>
 
       {/* Lista */}
       <div className="flex-1 overflow-y-auto space-y-2">
@@ -186,11 +214,15 @@ export const Comunidades: React.FC = () => {
         ) : filtrados.map(c => (
           <div key={c.id} className="bg-white border border-gray-200 rounded-lg p-3 flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <p onClick={() => setVerCom(c)} className="font-bold text-sm cursor-pointer hover:text-primary-btn hover:underline flex items-center gap-1">
+              <p onClick={() => setVerCom(c)} className="font-bold text-sm cursor-pointer hover:text-primary-btn hover:underline flex items-center gap-1 flex-wrap">
                 <Home size={14} className="shrink-0" /> {c.nome}
+                {c.isolada_estiagem && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded border border-orange-300 bg-orange-50 text-orange-700">ISOLADA NA ESTIAGEM</span>
+                )}
               </p>
               <p className="text-xs text-text-secondary truncate mt-0.5">
                 {[
+                  c.calha || '',
                   c.presidente_nome ? `Pres.: ${c.presidente_nome}` : '',
                   c.qtd_pessoas ? `${c.qtd_pessoas} pessoas` : '',
                   c.qtd_familias ? `${c.qtd_familias} famílias` : '',
@@ -231,6 +263,8 @@ export const Comunidades: React.FC = () => {
             </div>
             <div className="overflow-y-auto p-4 text-sm">
               {([
+                ['Calha', verCom.calha],
+                ['Isolada na estiagem', verCom.isolada_estiagem ? 'Sim' : 'Não'],
                 ['Presidente', verCom.presidente_nome],
                 ['Telefone', verCom.presidente_telefone],
                 ['CPF do Presidente', verCom.presidente_cpf],
@@ -282,6 +316,13 @@ export const Comunidades: React.FC = () => {
             <div className="overflow-y-auto p-4 grid grid-cols-2 gap-3 text-sm">
               <div className="col-span-2"><label className={lbl}>Nome da Comunidade *</label>
                 <input className={inp} value={form.nome || ''} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} /></div>
+
+              <div><label className={lbl}>Calha / Localização</label>
+                <input className={inp} list="lista-calhas" placeholder="ex: Lago de Caiambé" value={form.calha || ''} onChange={e => setForm(f => ({ ...f, calha: e.target.value || null }))} />
+                <datalist id="lista-calhas">{calhas.map(c => <option key={c} value={c} />)}</datalist></div>
+              <div className="flex items-end pb-2"><label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                <input type="checkbox" checked={!!form.isolada_estiagem} onChange={e => setForm(f => ({ ...f, isolada_estiagem: e.target.checked }))} />
+                Fica isolada na estiagem</label></div>
 
               <div className="col-span-2"><label className={lbl}>Coordenada (cole "lat, lng" do celular)</label>
                 <input className={inp} placeholder="-3.6402, -64.5525" value={coordCola} onChange={e => aplicarCoord(e.target.value)} /></div>
