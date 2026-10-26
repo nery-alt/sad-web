@@ -50,6 +50,8 @@ type Comunidade = {
   qtd_familias: number | null
   presidente_nome: string | null
   presidente_telefone: string | null
+  calha: string | null
+  isolada_estiagem: boolean | null
 }
 
 // Centro de Tefé — usado como fallback quando não há pontos
@@ -129,7 +131,7 @@ export const MapaOcorrencias: React.FC = () => {
     (async () => {
       const { data } = await supabase
         .from('comunidades')
-        .select('id, nome, gps_lat, gps_lng, distancia, duracao_viagem, qtd_pessoas, qtd_familias, presidente_nome, presidente_telefone')
+        .select('id, nome, gps_lat, gps_lng, distancia, duracao_viagem, qtd_pessoas, qtd_familias, presidente_nome, presidente_telefone, calha, isolada_estiagem')
       setComunidades((data as Comunidade[]) || [])
     })()
   }, [])
@@ -322,7 +324,7 @@ export const MapaOcorrencias: React.FC = () => {
     for (const c of comCoord) {
       const icon = L.divIcon({
         className: '',
-        html: `<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#2563eb;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(45deg);color:#fff;font-size:14px;">🏠</span></div>`,
+        html: `<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${c.isolada_estiagem ? '#9333ea' : '#2563eb'};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(45deg);color:#fff;font-size:14px;">🏠</span></div>`,
         iconSize: [30, 30],
         iconAnchor: [15, 30],
         popupAnchor: [0, -30],
@@ -336,6 +338,8 @@ export const MapaOcorrencias: React.FC = () => {
       ].filter(Boolean).join(' · ')
       const html = `<div style="min-width:210px;font-family:sans-serif;">
         <div style="font-weight:700;color:#2563eb;margin-bottom:3px;">🏠 ${esc(c.nome)}</div>
+        ${c.isolada_estiagem ? '<div style="font-size:11px;font-weight:700;color:#9333ea;margin-bottom:2px;">⚠ Fica isolada na estiagem</div>' : ''}
+        ${linha('Calha', c.calha)}
         ${linha('Presidente', c.presidente_nome)}
         ${linha('Telefone', c.presidente_telefone)}
         ${pessoas ? `<div style="font-size:12px;"><b>População:</b> ${esc(pessoas)}</div>` : ''}
@@ -402,6 +406,8 @@ export const MapaOcorrencias: React.FC = () => {
           <Legenda cor="#d97706" label="Médio" />
           <Legenda cor="#16a34a" label="Baixo" />
           <Legenda cor="#6b7280" label="N/D" />
+          {mostrarComunidades && <Legenda cor="#2563eb" label="Comunidade" />}
+          {mostrarComunidades && <Legenda cor="#9333ea" label="Isolada na estiagem" />}
         </div>
         {mostrarFocos && (
           <div className="w-full text-xs text-text-secondary">
