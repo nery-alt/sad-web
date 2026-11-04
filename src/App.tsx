@@ -268,6 +268,14 @@ const App: React.FC = () => {
     return false
   }
 
+  // Mostra o erro do banco em vez de engolir. Devolve true se houve erro.
+  const falhou = (error: { message: string } | null, acao: string) => {
+    if (!error) return false
+    console.error(acao, error)
+    alert(`Não foi possível ${acao}: ${error.message}`)
+    return true
+  }
+
   // Status da pessoa usa "em_aberto"; o protocolo usa "aberto". O resto é igual.
   const statusPessoaParaProtocolo = (s: string) => (s === 'em_aberto' ? 'aberto' : s)
   const LABEL_STATUS_PESSOA: Record<string, string> = {
@@ -285,7 +293,8 @@ const App: React.FC = () => {
     const now = new Date().toISOString()
     setProtocolos(prev => prev.map(p => p.pessoa_id === pessoaId ? { ...p, status: alvo as Protocolo['status'] } : p))
     setSelectedProtocolo(prev => (prev && prev.pessoa_id === pessoaId) ? { ...prev, status: alvo as Protocolo['status'] } : prev)
-    await supabase.from('protocolos').update({ status: alvo, atualizado_em: now }).eq('pessoa_id', pessoaId)
+    const { error } = await supabase.from('protocolos').update({ status: alvo, atualizado_em: now }).eq('pessoa_id', pessoaId)
+    if (falhou(error, 'atualizar os protocolos da pessoa')) fetchData()
   }
 
   const handleSavePessoa = async (pessoa: Pessoa) => {
@@ -314,15 +323,18 @@ const App: React.FC = () => {
     const now = new Date().toISOString()
     setPessoas(prev => prev.map(p => p.id === id ? { ...p, status_ocorrencia: status as Pessoa['status_ocorrencia'], atualizado_em: now } : p))
     setSelectedPessoa(prev => prev?.id === id ? { ...prev, status_ocorrencia: status as Pessoa['status_ocorrencia'], atualizado_em: now } : prev)
-    await supabase.from('pessoas').update({ status_ocorrencia: status, atualizado_em: now }).eq('id', id)
+    const { error } = await supabase.from('pessoas').update({ status_ocorrencia: status, atualizado_em: now }).eq('id', id)
+    if (falhou(error, 'atualizar o status da pessoa')) { fetchData(); return }
     await cascatearStatusProtocolos(id, status)
   }
 
   const handleDeletePessoa = async (id: number) => {
     if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir esta pessoa e todo o seu dossiê?')) return
-    await supabase.from('pessoas').delete().eq('id', id)
+    const { error } = await supabase.from('pessoas').delete().eq('id', id)
+    if (falhou(error, 'excluir a pessoa')) return
     setSelectedPessoa(null)
+    fetchData()
   }
 
   const handleImportDoc = async (pessoaId: number, file: File) => {
@@ -334,10 +346,12 @@ const App: React.FC = () => {
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(filePath, file, { upsert: false })
     if (uploadError) { alert('Erro ao enviar arquivo: ' + uploadError.message); return }
     const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
-    await supabase.from('documentos_recebidos').insert({
+    const { error } = await supabase.from('documentos_recebidos').insert({
       pessoa_id: pessoaId, protocolo_id: null, nome: file.name, tipo: file.type,
       caminho: urlData.publicUrl, descricao: '', data_recebimento: dataRec, criado_em: new Date().toISOString(),
     })
+    if (falhou(error, 'registrar o documento')) return
+    fetchData()
   }
 
   const handleImportDocGlobal = async (file: File) => {
@@ -349,10 +363,12 @@ const App: React.FC = () => {
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(filePath, file, { upsert: false })
     if (uploadError) { alert('Erro ao enviar arquivo: ' + uploadError.message); return }
     const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
-    await supabase.from('documentos_recebidos').insert({
+    const { error } = await supabase.from('documentos_recebidos').insert({
       pessoa_id: null, protocolo_id: null, nome: file.name, tipo: file.type,
       caminho: urlData.publicUrl, descricao: '', data_recebimento: dataRec, criado_em: new Date().toISOString(),
     })
+    if (falhou(error, 'registrar o documento')) return
+    fetchData()
   }
 
   const handleOpenFile = async (filePath: string) => {
@@ -375,7 +391,9 @@ const App: React.FC = () => {
         // best-effort: mesmo se falhar ao remover do storage, segue removendo o registro
       }
     }
-    await supabase.from('documentos_recebidos').delete().eq('id', id)
+    const { error } = await supabase.from('documentos_recebidos').delete().eq('id', id)
+    if (falhou(error, 'remover o documento')) return
+    fetchData()
   }
 
   const handleNewDocGerado = (pessoa: Pessoa) => {
@@ -395,11 +413,13 @@ const App: React.FC = () => {
     const historico = typeof data.historico === 'string' ? JSON.parse(data.historico || '[]') : data.historico
     const payload = { ...data, historico, data_entrada: data.data_entrada || null, prazo: data.prazo || null }
     if (protocolo.id) {
-      await supabase.from('protocolos').update({ ...payload, atualizado_em: now }).eq('id', protocolo.id)
+      const { error } = await supabase.from('protocolos').update({ ...payload, atualizado_em: now }).eq('id', protocolo.id)
+      if (falhou(error, 'salvar o protocolo')) return
       // Atualiza o detalhe aberto na hora (sem depender do realtime).
       setSelectedProtocolo(prev => (prev && prev.id === protocolo.id) ? { ...prev, ...data, atualizado_em: now } : prev)
     } else {
-      await supabase.from('protocolos').insert({ ...payload, criado_em: now, atualizado_em: now })
+      const { error } = await supabase.from('protocolos').insert({ ...payload, criado_em: now, atualizado_em: now })
+      if (falhou(error, 'salvar o protocolo')) return
     }
     fetchData()
   }
@@ -407,8 +427,10 @@ const App: React.FC = () => {
   const handleDeleteProtocolo = async (id: number) => {
     if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir este protocolo e seus vinculados?')) return
-    await supabase.from('protocolos').delete().eq('id', id)
+    const { error } = await supabase.from('protocolos').delete().eq('id', id)
+    if (falhou(error, 'excluir o protocolo')) return
     setSelectedProtocolo(null)
+    fetchData()
   }
 
   const handleUpdateProtocoloStatus = async (id: number, newStatus: string) => {
@@ -416,7 +438,9 @@ const App: React.FC = () => {
     // Atualiza a tela na hora (otimista), sem depender do realtime.
     setProtocolos(prev => prev.map(p => p.id === id ? { ...p, status: newStatus as Protocolo['status'] } : p))
     if (selectedProtocolo?.id === id) setSelectedProtocolo(prev => prev ? { ...prev, status: newStatus as Protocolo['status'] } : null)
-    await supabase.from('protocolos').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
+    const { error } = await supabase.from('protocolos').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
+    // Se falhou, a tela otimista estava errada: recarrega o estado real do banco.
+    if (falhou(error, 'atualizar o status do protocolo')) fetchData()
   }
 
   const handleAddMovimentacao = async (id: number, novaMovimentacao: string) => {
@@ -425,7 +449,8 @@ const App: React.FC = () => {
     if (!protocolo || !novaMovimentacao.trim()) return
     const historico: Movimentacao[] = JSON.parse(protocolo.historico || '[]')
     historico.unshift({ data: new Date().toISOString(), texto: novaMovimentacao })
-    await supabase.from('protocolos').update({ historico, atualizado_em: new Date().toISOString() }).eq('id', id)
+    const { error } = await supabase.from('protocolos').update({ historico, atualizado_em: new Date().toISOString() }).eq('id', id)
+    if (falhou(error, 'registrar a movimentação')) return
     if (selectedProtocolo?.id === id)
       setSelectedProtocolo(prev => prev ? { ...prev, historico: JSON.stringify(historico) } : null)
   }
@@ -434,35 +459,48 @@ const App: React.FC = () => {
   const handleSaveEncaminhamento = async (enc: Encaminhamento) => {
     if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
-    await supabase.from('encaminhamentos').insert({ ...enc, criado_em: now })
+    if (!enc.data_envio) { alert('Informe a data de envio do encaminhamento.'); return }
+    // Datas vazias ('') são rejeitadas pelo banco: data_retorno vazia vira null.
+    const { error } = await supabase.from('encaminhamentos').insert({ ...enc, data_retorno: enc.data_retorno || null, criado_em: now })
+    if (falhou(error, 'salvar o encaminhamento')) return
+    fetchData()
   }
 
   const handleDeleteEncaminhamento = async (id: number) => {
     if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir este encaminhamento?')) return
-    await supabase.from('encaminhamentos').delete().eq('id', id)
+    const { error } = await supabase.from('encaminhamentos').delete().eq('id', id)
+    if (falhou(error, 'excluir o encaminhamento')) return
+    fetchData()
   }
 
   const handleUpdateEncaminhamentoStatus = async (id: number, status: Encaminhamento['status']) => {
     if (bloqueadoSomenteLeitura()) return
-    await supabase.from('encaminhamentos').update({ status }).eq('id', id)
+    const { error } = await supabase.from('encaminhamentos').update({ status }).eq('id', id)
+    if (falhou(error, 'atualizar o encaminhamento')) return
+    fetchData()
   }
 
   const handleSaveDocumentoGerado = async (documento: DocumentoGerado) => {
     if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
-    const { pessoa_nome, protocolo_numero, ...data } = documento
-    if (documento.id) {
-      await supabase.from('documentos_gerados').update({ ...data, criado_em: now }).eq('id', documento.id)
-    } else {
-      await supabase.from('documentos_gerados').insert({ ...data, criado_em: now })
-    }
+    const { pessoa_nome, protocolo_numero, ...rest } = documento
+    // data_geracao vazia ('') é rejeitada pelo banco (timestamp): usa a data/hora atual.
+    const data = { ...rest, data_geracao: rest.data_geracao || now }
+    // Lança o erro para o formulário continuar aberto e o texto digitado não se perder.
+    const { error } = documento.id
+      ? await supabase.from('documentos_gerados').update({ ...data, criado_em: now }).eq('id', documento.id)
+      : await supabase.from('documentos_gerados').insert({ ...data, criado_em: now })
+    if (error) throw error
+    fetchData()
   }
 
   const handleDeleteDocumentoGerado = async (id: number) => {
     if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir este documento gerado?')) return
-    await supabase.from('documentos_gerados').delete().eq('id', id)
+    const { error } = await supabase.from('documentos_gerados').delete().eq('id', id)
+    if (falhou(error, 'excluir o documento')) return
+    fetchData()
   }
 
   const handleSaveTarefa = async (tarefa: Tarefa) => {
@@ -482,7 +520,7 @@ const App: React.FC = () => {
     const { error } = tarefa.id
       ? await supabase.from('tarefas').update({ ...payload, atualizado_em: now }).eq('id', tarefa.id)
       : await supabase.from('tarefas').insert({ ...payload, criado_em: now, atualizado_em: now })
-    if (error) { alert('Não foi possível salvar a tarefa: ' + error.message); return }
+    if (falhou(error, 'salvar a tarefa')) return
     fetchData()
   }
 
@@ -490,7 +528,7 @@ const App: React.FC = () => {
     if (bloqueadoSomenteLeitura()) return
     const newStatus = currentStatus === 'concluida' ? 'pendente' : 'concluida'
     const { error } = await supabase.from('tarefas').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
-    if (error) { alert('Não foi possível atualizar a tarefa: ' + error.message); return }
+    if (falhou(error, 'atualizar a tarefa')) return
     fetchData()
   }
 
@@ -498,7 +536,7 @@ const App: React.FC = () => {
     if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir esta tarefa?')) return
     const { error } = await supabase.from('tarefas').delete().eq('id', id)
-    if (error) { alert('Não foi possível excluir a tarefa: ' + error.message); return }
+    if (falhou(error, 'excluir a tarefa')) return
     fetchData()
   }
 
@@ -510,28 +548,33 @@ const App: React.FC = () => {
       horario: item.horario || '', realizado: item.realizado ?? 0,
       pessoa_id: item.pessoa_id ?? null, protocolo_id: item.protocolo_id ?? null,
     }
-    if (item.id) {
-      await supabase.from('agenda').update(payload).eq('id', item.id)
-    } else {
-      await supabase.from('agenda').insert({ ...payload, criado_em: now })
-    }
+    const { error } = item.id
+      ? await supabase.from('agenda').update(payload).eq('id', item.id)
+      : await supabase.from('agenda').insert({ ...payload, criado_em: now })
+    if (falhou(error, 'salvar o compromisso')) return
+    fetchData()
   }
 
   const handleToggleAgendaRealizado = async (id: number, currentRealizado: number) => {
     if (bloqueadoSomenteLeitura()) return
-    await supabase.from('agenda').update({ realizado: currentRealizado === 1 ? 0 : 1 }).eq('id', id)
+    const { error } = await supabase.from('agenda').update({ realizado: currentRealizado === 1 ? 0 : 1 }).eq('id', id)
+    if (falhou(error, 'atualizar o compromisso')) return
+    fetchData()
   }
 
   const handleDeleteAgenda = async (id: number) => {
     if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir este compromisso?')) return
-    await supabase.from('agenda').delete().eq('id', id)
+    const { error } = await supabase.from('agenda').delete().eq('id', id)
+    if (falhou(error, 'excluir o compromisso')) return
+    fetchData()
   }
 
   const handleSaveConfig = async (newConfig: Config) => {
     if (bloqueadoSomenteLeitura()) return
     for (const [chave, valor] of Object.entries(newConfig)) {
-      await supabase.from('configuracoes').upsert({ chave, valor }, { onConflict: 'chave' })
+      const { error } = await supabase.from('configuracoes').upsert({ chave, valor }, { onConflict: 'chave' })
+      if (falhou(error, 'salvar as configurações')) return
     }
     alert('Configurações salvas com sucesso!')
     setConfig(newConfig)
@@ -666,7 +709,16 @@ const App: React.FC = () => {
               <h2 className="text-lg font-bold">{docGeradoFormData.id ? 'Editar Documento' : 'Novo Documento'}</h2>
               <button onClick={() => setDocGeradoFormOpen(false)} className="text-text-secondary hover:text-text-main">✕</button>
             </div>
-            <form onSubmit={async (e) => { e.preventDefault(); await handleSaveDocumentoGerado(docGeradoFormData); setDocGeradoFormOpen(false) }} className="p-6 overflow-y-auto space-y-4">
+            <form onSubmit={async (e) => {
+              e.preventDefault()
+              try {
+                await handleSaveDocumentoGerado(docGeradoFormData)
+              } catch (err) {
+                alert('Não foi possível salvar o documento: ' + (err instanceof Error ? err.message : (err as { message?: string })?.message || 'erro desconhecido'))
+                return
+              }
+              setDocGeradoFormOpen(false)
+            }} className="p-6 overflow-y-auto space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-text-secondary uppercase mb-1">Tipo</label>
