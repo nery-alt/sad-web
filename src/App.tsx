@@ -468,24 +468,38 @@ const App: React.FC = () => {
   const handleSaveTarefa = async (tarefa: Tarefa) => {
     if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
-    const { pessoa_nome, protocolo_numero, ...data } = tarefa
-    if (tarefa.id) {
-      await supabase.from('tarefas').update({ ...data, atualizado_em: now }).eq('id', tarefa.id)
-    } else {
-      await supabase.from('tarefas').insert({ ...data, criado_em: now, atualizado_em: now })
+    // Só colunas reais da tabela (ao editar, o objeto traz também pessoa/protocolo do join).
+    // Prazo vazio vira null: a coluna é "date" e '' é rejeitado pelo banco.
+    const payload = {
+      titulo: tarefa.titulo,
+      descricao: tarefa.descricao || '',
+      prioridade: tarefa.prioridade || 'media',
+      status: tarefa.status || 'pendente',
+      prazo: tarefa.prazo || null,
+      pessoa_id: tarefa.pessoa_id ?? null,
+      protocolo_id: tarefa.protocolo_id ?? null,
     }
+    const { error } = tarefa.id
+      ? await supabase.from('tarefas').update({ ...payload, atualizado_em: now }).eq('id', tarefa.id)
+      : await supabase.from('tarefas').insert({ ...payload, criado_em: now, atualizado_em: now })
+    if (error) { alert('Não foi possível salvar a tarefa: ' + error.message); return }
+    fetchData()
   }
 
   const handleToggleTarefaStatus = async (id: number, currentStatus: string) => {
     if (bloqueadoSomenteLeitura()) return
     const newStatus = currentStatus === 'concluida' ? 'pendente' : 'concluida'
-    await supabase.from('tarefas').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
+    const { error } = await supabase.from('tarefas').update({ status: newStatus, atualizado_em: new Date().toISOString() }).eq('id', id)
+    if (error) { alert('Não foi possível atualizar a tarefa: ' + error.message); return }
+    fetchData()
   }
 
   const handleDeleteTarefa = async (id: number) => {
     if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Excluir esta tarefa?')) return
-    await supabase.from('tarefas').delete().eq('id', id)
+    const { error } = await supabase.from('tarefas').delete().eq('id', id)
+    if (error) { alert('Não foi possível excluir a tarefa: ' + error.message); return }
+    fetchData()
   }
 
   const handleSaveAgenda = async (item: AgendaItem) => {
