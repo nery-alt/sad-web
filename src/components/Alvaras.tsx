@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { FileCheck, Plus, Search, Printer, Pencil, Trash2, Paperclip, FileText, X } from 'lucide-react'
+import { FileCheck, Plus, Search, Printer, Pencil, Trash2, Paperclip, FileText, X, FileDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { SERVIDORES, gerarRequerimentoAlvara, nomeArquivoRequerimento, type Porte } from '../lib/requerimentoAlvara'
 
 interface Alvara {
   id: number
@@ -16,6 +17,7 @@ interface Alvara {
   tipo_estabelecimento: string | null
   area_total: number | null
   capacidade_pessoas: number | null
+  classificacao_porte: string | null
   situacao_imovel: string | null
   apto_alvara: boolean | null
   descricao_tecnica: string | null
@@ -45,6 +47,21 @@ const VAZIO: Partial<Alvara> = {
 
 const fmt = (v: unknown) => (v === null || v === undefined || v === '') ? '—' : String(v)
 const dataBR = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—'
+const hojeISO = () => new Date().toLocaleDateString('sv-SE') // AAAA-MM-DD no fuso local
+const PORTES: Porte[] = ['Pequeno', 'Médio', 'Grande']
+
+interface ReqForm {
+  tecnicoId: string
+  assinanteId: string
+  porte: Porte | ''
+  mesVistoria: string // AAAA-MM
+  dataEmissao: string // AAAA-MM-DD
+}
+
+const servidorPorNome = (nome: string | null) => {
+  const n = (nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  return SERVIDORES.find(s => n && s.nome.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().startsWith(n.split(' ')[0]))
+}
 
 export const Alvaras: React.FC = () => {
   const [alvaras, setAlvaras] = useState<Alvara[]>([])
@@ -63,6 +80,10 @@ export const Alvaras: React.FC = () => {
   const [anexarId, setAnexarId] = useState<number | null>(null)
   const [uploadingId, setUploadingId] = useState<number | null>(null)
   const [anexos, setAnexos] = useState<Anexo[]>([])
+
+  const [reqAlvara, setReqAlvara] = useState<Alvara | null>(null)
+  const [reqForm, setReqForm] = useState<ReqForm>({ tecnicoId: 'reumano', assinanteId: 'reumano', porte: '', mesVistoria: '', dataEmissao: '' })
+  const [gerando, setGerando] = useState(false)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -222,6 +243,54 @@ export const Alvaras: React.FC = () => {
     setTimeout(() => w.print(), 500)
   }
 
+  // ---------- Requerimento e Protocolo (Word) ----------
+  const abrirRequerimento = (a: Alvara) => {
+    const hoje = hojeISO()
+    const tec = servidorPorNome(a.nome_vistoriador) || SERVIDORES[0]
+    setReqForm({
+      tecnicoId: tec.id,
+      assinanteId: tec.id,
+      porte: (PORTES as string[]).includes(a.classificacao_porte || '') ? a.classificacao_porte as Porte : '',
+      mesVistoria: (a.data_vistoria || hoje).slice(0, 7),
+      dataEmissao: hoje,
+    })
+    setReqAlvara(a)
+  }
+
+  const gerarRequerimento = async () => {
+    const a = reqAlvara
+    if (!a || !reqForm.porte || !reqForm.mesVistoria || !reqForm.dataEmissao) return
+    const tecnico = SERVIDORES.find(s => s.id === reqForm.tecnicoId)!
+    const assinante = SERVIDORES.find(s => s.id === reqForm.assinanteId)!
+    setGerando(true)
+    try {
+      const blob = await gerarRequerimentoAlvara({
+        ...a,
+        porte: reqForm.porte,
+        mesVistoria: reqForm.mesVistoria,
+        dataEmissao: reqForm.dataEmissao,
+        tecnico,
+        assinante,
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = nomeArquivoRequerimento(reqForm.dataEmissao, a.numero, a.nome_estabelecimento)
+      document.body.appendChild(link); link.click(); link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 2000)
+      // guarda o porte escolhido no cadastro, para vir marcado da próxima vez
+      if (a.classificacao_porte !== reqForm.porte) {
+        const { error } = await supabase.from('alvaras').update({ classificacao_porte: reqForm.porte }).eq('id', a.id)
+        if (!error) carregar()
+      }
+      setReqAlvara(null)
+    } catch (e) {
+      alert('Não foi possível gerar o requerimento: ' + (e instanceof Error ? e.message : String(e)))
+    } finally {
+      setGerando(false)
+    }
+  }
+
   const badge = (s: string | null) => {
     if (s === 'Liberado') return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-success/10 text-success">LIBERADO</span>
     if (s === 'Não liberado') return <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-error-expired/10 text-error-expired">NÃO LIBERADO</span>
@@ -302,6 +371,10 @@ export const Alvaras: React.FC = () => {
                   <FileText size={13} /> {anexosDe(a.id).length}
                 </button>
               )}
+              <button onClick={() => abrirRequerimento(a)} title="Gerar Requerimento e Protocolo (Word)"
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-primary-btn/40 text-primary-btn hover:bg-primary-btn/5">
+                <FileDown size={13} /> Requerimento
+              </button>
               <button onClick={() => pedirAnexo(a.id)} disabled={uploadingId === a.id}
                 className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-gray-200 text-text-secondary hover:bg-gray-50">
                 <Paperclip size={13} /> {uploadingId === a.id ? 'Enviando…' : 'Anexar'}
@@ -343,6 +416,7 @@ export const Alvaras: React.FC = () => {
                 ['Município/UF', verAlvara.municipio],
                 ['Área Total (m²)', verAlvara.area_total],
                 ['Capacidade (pessoas)', verAlvara.capacidade_pessoas],
+                ['Porte', verAlvara.classificacao_porte],
                 ['Situação', verAlvara.situacao_imovel],
                 ['Data da Vistoria', dataBR(verAlvara.data_vistoria)],
                 ['Vistoriador', verAlvara.nome_vistoriador],
@@ -381,8 +455,59 @@ export const Alvaras: React.FC = () => {
             </div>
             <div className="p-4 border-t flex flex-wrap justify-end gap-2">
               <button onClick={() => pedirAnexo(verAlvara.id)} disabled={uploadingId === verAlvara.id} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-gray-200 text-text-secondary hover:bg-gray-50"><Paperclip size={15} /> {uploadingId === verAlvara.id ? 'Enviando…' : 'Adicionar anexo'}</button>
+              <button onClick={() => { const a = verAlvara; setVerAlvara(null); abrirRequerimento(a) }} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-primary-btn/40 text-primary-btn hover:bg-primary-btn/5"><FileDown size={15} /> Gerar Requerimento</button>
               <button onClick={() => imprimirUm(verAlvara)} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-gray-300 text-text-secondary hover:bg-gray-50"><Printer size={15} /> Imprimir este</button>
               <button onClick={() => { const a = verAlvara; setVerAlvara(null); abrirEdicao(a) }} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm bg-primary-btn text-white font-bold hover:opacity-90"><Pencil size={15} /> Editar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal gerar requerimento */}
+      {reqAlvara && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <div className="min-w-0">
+                <span className="text-xs text-text-secondary font-mono">{reqAlvara.numero || 'S/N'}</span>
+                <h2 className="text-lg font-bold truncate">Requerimento e Protocolo</h2>
+                <p className="text-xs text-text-secondary truncate">{reqAlvara.nome_estabelecimento}</p>
+              </div>
+              <button onClick={() => setReqAlvara(null)} className="p-1 hover:bg-gray-100 rounded"><X size={20} /></button>
+            </div>
+            <div className="overflow-y-auto p-4 grid grid-cols-2 gap-3 text-sm">
+              <div><label className={lbl}>Responsável técnico</label>
+                <select className={inp} value={reqForm.tecnicoId} onChange={e => setReqForm(f => ({ ...f, tecnicoId: e.target.value }))}>
+                  {SERVIDORES.map(s => <option key={s.id} value={s.id}>{s.nome.split(' ')[0]}</option>)}
+                </select></div>
+              <div><label className={lbl}>Quem assina</label>
+                <select className={inp} value={reqForm.assinanteId} onChange={e => setReqForm(f => ({ ...f, assinanteId: e.target.value }))}>
+                  {SERVIDORES.map(s => <option key={s.id} value={s.id}>{s.nome.split(' ')[0]}</option>)}
+                </select></div>
+              <div className="col-span-2"><label className={lbl}>Porte *</label>
+                <div className="flex gap-2">
+                  {PORTES.map(p => (
+                    <button key={p} type="button" onClick={() => setReqForm(f => ({ ...f, porte: p }))}
+                      className={`flex-1 py-2 rounded border text-sm ${reqForm.porte === p ? 'bg-primary-btn text-white border-primary-btn font-bold' : 'border-gray-200 text-text-secondary hover:bg-gray-50'}`}>{p}</button>
+                  ))}
+                </div></div>
+              <div><label className={lbl}>Mês da vistoria</label>
+                <input type="month" className={inp} value={reqForm.mesVistoria} onChange={e => setReqForm(f => ({ ...f, mesVistoria: e.target.value }))} />
+                <p className="text-[11px] text-text-secondary mt-1">Validade: 1 ano depois</p></div>
+              <div><label className={lbl}>Data de emissão</label>
+                <input type="date" className={inp} value={reqForm.dataEmissao} onChange={e => setReqForm(f => ({ ...f, dataEmissao: e.target.value }))} /></div>
+              {(!reqAlvara.nome_responsavel || !(reqAlvara.cnpj || reqAlvara.cpf_responsavel) || !reqAlvara.endereco || !reqAlvara.tipo_estabelecimento) && (
+                <p className="col-span-2 text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded p-2">
+                  Atenção: falta no cadastro {[!reqAlvara.nome_responsavel && 'o proprietário', !(reqAlvara.cnpj || reqAlvara.cpf_responsavel) && 'o CPF/CNPJ', !reqAlvara.endereco && 'o endereço', !reqAlvara.tipo_estabelecimento && 'a atividade'].filter(Boolean).join(', ')}. O campo sairá em branco no documento.
+                </p>
+              )}
+            </div>
+            <div className="p-4 border-t flex justify-end gap-2">
+              <button onClick={() => setReqAlvara(null)} className="px-4 py-2 border rounded-lg text-sm">Cancelar</button>
+              <button onClick={gerarRequerimento} disabled={gerando || !reqForm.porte || !reqForm.mesVistoria || !reqForm.dataEmissao}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-btn text-white rounded-lg font-bold text-sm disabled:opacity-50">
+                <FileDown size={16} /> {gerando ? 'Gerando...' : 'Baixar Word'}
+              </button>
             </div>
           </div>
         </div>
@@ -421,7 +546,11 @@ export const Alvaras: React.FC = () => {
                 <input type="number" className={inp} value={form.area_total ?? ''} onChange={e => setForm(f => ({ ...f, area_total: e.target.value === '' ? null : Number(e.target.value) }))} /></div>
               <div><label className={lbl}>Capacidade (pessoas)</label>
                 <input type="number" className={inp} value={form.capacidade_pessoas ?? ''} onChange={e => setForm(f => ({ ...f, capacidade_pessoas: e.target.value === '' ? null : Number(e.target.value) }))} /></div>
-              <div className="col-span-2"><label className={lbl}>Situação</label>
+              <div><label className={lbl}>Porte</label>
+                <select className={inp} value={form.classificacao_porte || ''} onChange={e => setForm(f => ({ ...f, classificacao_porte: e.target.value || null }))}>
+                  <option value="">—</option>{PORTES.map(p => <option key={p}>{p}</option>)}
+                </select></div>
+              <div><label className={lbl}>Situação</label>
                 <select className={inp} value={form.situacao_imovel || 'Em análise'} onChange={e => setForm(f => ({ ...f, situacao_imovel: e.target.value }))}>
                   <option>Em análise</option><option>Liberado</option><option>Não liberado</option>
                 </select></div>
