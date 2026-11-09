@@ -20,7 +20,7 @@ export const SERVIDORES: Servidor[] = [
   },
   {
     id: 'elienay',
-    nome: 'Elienay de Olieira Costa',
+    nome: 'Elienay de Oliveira Costa',
     cargoTecnico: 'Agente de Defesa Civil / Setor de Vistoria',
     cargoAssinatura1: 'Agente de Defesa Civil',
     cargoAssinatura2: 'Setor de Vistoria',
