@@ -1,28 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { FileCheck, Plus, Search, Printer, Pencil, Trash2, Paperclip, FileText, X, FileDown } from 'lucide-react'
+import { FileCheck, Plus, Search, Printer, Pencil, Trash2, Paperclip, FileText, X, FileDown, ClipboardCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { SERVIDORES, gerarRequerimentoAlvara, nomeArquivoRequerimento, type Porte } from '../lib/requerimentoAlvara'
+import { LaudoModal, type AlvaraLaudo } from './LaudoModal'
 
-interface Alvara {
-  id: number
-  numero: string | null
-  nome_estabelecimento: string
-  cnpj: string | null
-  nome_responsavel: string | null
-  cpf_responsavel: string | null
-  telefone: string | null
-  endereco: string | null
-  bairro: string | null
-  municipio: string | null
-  tipo_estabelecimento: string | null
-  area_total: number | null
-  capacidade_pessoas: number | null
-  classificacao_porte: string | null
+interface Alvara extends AlvaraLaudo {
   situacao_imovel: string | null
   apto_alvara: boolean | null
   descricao_tecnica: string | null
   observacoes: string | null
-  nome_vistoriador: string | null
   matricula_vistoriador: string | null
   data_vistoria: string | null
   documento_url: string | null
@@ -49,6 +35,15 @@ const fmt = (v: unknown) => (v === null || v === undefined || v === '') ? '—' 
 const dataBR = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—'
 const hojeISO = () => new Date().toLocaleDateString('sv-SE') // AAAA-MM-DD no fuso local
 const PORTES: Porte[] = ['Pequeno', 'Médio', 'Grande']
+
+// Sim / Não / (não avaliado)
+const SimNao: React.FC<{ value: boolean | null | undefined; onChange: (v: boolean | null) => void }> = ({ value, onChange }) => (
+  <select className="w-full p-2 border border-gray-200 rounded text-sm outline-none focus:ring-2 focus:ring-primary-btn/20"
+    value={value === true ? 's' : value === false ? 'n' : ''}
+    onChange={e => onChange(e.target.value === 's' ? true : e.target.value === 'n' ? false : null)}>
+    <option value="">—</option><option value="s">Sim</option><option value="n">Não</option>
+  </select>
+)
 
 interface ReqForm {
   tecnicoId: string
@@ -84,6 +79,7 @@ export const Alvaras: React.FC = () => {
   const [reqAlvara, setReqAlvara] = useState<Alvara | null>(null)
   const [reqForm, setReqForm] = useState<ReqForm>({ tecnicoId: 'reumano', assinanteId: 'reumano', porte: '', mesVistoria: '', dataEmissao: '' })
   const [gerando, setGerando] = useState(false)
+  const [laudoAlvara, setLaudoAlvara] = useState<Alvara | null>(null)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -375,6 +371,10 @@ export const Alvaras: React.FC = () => {
                 className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-primary-btn/40 text-primary-btn hover:bg-primary-btn/5">
                 <FileDown size={13} /> Requerimento
               </button>
+              <button onClick={() => setLaudoAlvara(a)} title="Gerar Laudo de Vistoria (Word)"
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-primary-btn/40 text-primary-btn hover:bg-primary-btn/5">
+                <ClipboardCheck size={13} /> Laudo
+              </button>
               <button onClick={() => pedirAnexo(a.id)} disabled={uploadingId === a.id}
                 className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-gray-200 text-text-secondary hover:bg-gray-50">
                 <Paperclip size={13} /> {uploadingId === a.id ? 'Enviando…' : 'Anexar'}
@@ -417,6 +417,8 @@ export const Alvaras: React.FC = () => {
                 ['Área Total (m²)', verAlvara.area_total],
                 ['Capacidade (pessoas)', verAlvara.capacidade_pessoas],
                 ['Porte', verAlvara.classificacao_porte],
+                ['Grau de Risco', verAlvara.classificacao_risco],
+                ['Parecer', verAlvara.parecer],
                 ['Situação', verAlvara.situacao_imovel],
                 ['Data da Vistoria', dataBR(verAlvara.data_vistoria)],
                 ['Vistoriador', verAlvara.nome_vistoriador],
@@ -456,6 +458,7 @@ export const Alvaras: React.FC = () => {
             <div className="p-4 border-t flex flex-wrap justify-end gap-2">
               <button onClick={() => pedirAnexo(verAlvara.id)} disabled={uploadingId === verAlvara.id} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-gray-200 text-text-secondary hover:bg-gray-50"><Paperclip size={15} /> {uploadingId === verAlvara.id ? 'Enviando…' : 'Adicionar anexo'}</button>
               <button onClick={() => { const a = verAlvara; setVerAlvara(null); abrirRequerimento(a) }} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-primary-btn/40 text-primary-btn hover:bg-primary-btn/5"><FileDown size={15} /> Gerar Requerimento</button>
+              <button onClick={() => { const a = verAlvara; setVerAlvara(null); setLaudoAlvara(a) }} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-primary-btn/40 text-primary-btn hover:bg-primary-btn/5"><ClipboardCheck size={15} /> Gerar Laudo</button>
               <button onClick={() => imprimirUm(verAlvara)} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm border border-gray-300 text-text-secondary hover:bg-gray-50"><Printer size={15} /> Imprimir este</button>
               <button onClick={() => { const a = verAlvara; setVerAlvara(null); abrirEdicao(a) }} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm bg-primary-btn text-white font-bold hover:opacity-90"><Pencil size={15} /> Editar</button>
             </div>
@@ -513,6 +516,9 @@ export const Alvaras: React.FC = () => {
         </div>
       )}
 
+      {/* Modal laudo */}
+      {laudoAlvara && <LaudoModal alvara={laudoAlvara} onClose={() => setLaudoAlvara(null)} onSaved={carregar} />}
+
       {/* Modal novo/editar */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -554,6 +560,72 @@ export const Alvaras: React.FC = () => {
                 <select className={inp} value={form.situacao_imovel || 'Em análise'} onChange={e => setForm(f => ({ ...f, situacao_imovel: e.target.value }))}>
                   <option>Em análise</option><option>Liberado</option><option>Não liberado</option>
                 </select></div>
+              <div><label className={lbl}>Grau de risco</label>
+                <select className={inp} value={form.classificacao_risco || ''} onChange={e => setForm(f => ({ ...f, classificacao_risco: e.target.value || null }))}>
+                  <option value="">—</option><option>Baixo</option><option>Médio</option><option>Alto</option>
+                </select></div>
+              <div><label className={lbl}>Coordenadas GPS (lat, long)</label>
+                <div className="flex gap-1">
+                  <input type="number" step="any" className={inp} placeholder="-3.35" value={form.gps_lat ?? ''} onChange={e => setForm(f => ({ ...f, gps_lat: e.target.value === '' ? null : Number(e.target.value) }))} />
+                  <input type="number" step="any" className={inp} placeholder="-64.71" value={form.gps_lng ?? ''} onChange={e => setForm(f => ({ ...f, gps_lng: e.target.value === '' ? null : Number(e.target.value) }))} />
+                </div></div>
+
+              <div className="col-span-2 mt-2 pt-3 border-t"><p className="text-sm font-bold">Checklist de segurança contra incêndio</p>
+                <p className="text-[11px] text-text-secondary">Deixe "—" no que não foi avaliado. Esses itens montam o texto do laudo.</p></div>
+              <div><label className={lbl}>Possui extintor</label>
+                <SimNao value={form.possui_extintor} onChange={v => setForm(f => ({ ...f, possui_extintor: v }))} /></div>
+              <div className="flex gap-2">
+                <div className="w-20"><label className={lbl}>Qtd.</label>
+                  <input type="number" min={0} className={inp} value={form.qtd_extintores ?? ''} onChange={e => setForm(f => ({ ...f, qtd_extintores: e.target.value === '' ? null : Number(e.target.value) }))} /></div>
+                <div className="flex-1"><label className={lbl}>Tipo</label>
+                  <input className={inp} placeholder="pó ABC" value={form.tipo_extintor || ''} onChange={e => setForm(f => ({ ...f, tipo_extintor: e.target.value }))} /></div>
+              </div>
+              <div><label className={lbl}>Extintor dentro da validade</label>
+                <SimNao value={form.extintor_validade} onChange={v => setForm(f => ({ ...f, extintor_validade: v }))} /></div>
+              <div><label className={lbl}>Extintor em local adequado</label>
+                <SimNao value={form.extintor_localizacao_ok} onChange={v => setForm(f => ({ ...f, extintor_localizacao_ok: v }))} /></div>
+              <div><label className={lbl}>Saída de emergência desobstruída</label>
+                <SimNao value={form.saida_desobstruida} onChange={v => setForm(f => ({ ...f, saida_desobstruida: v }))} /></div>
+              <div><label className={lbl}>Rotas de fuga adequadas</label>
+                <SimNao value={form.rotas_fuga_ok} onChange={v => setForm(f => ({ ...f, rotas_fuga_ok: v }))} /></div>
+              <div><label className={lbl}>Sinalização de emergência</label>
+                <SimNao value={form.sinalizacao_emergencia} onChange={v => setForm(f => ({ ...f, sinalizacao_emergencia: v }))} /></div>
+              <div><label className={lbl}>Iluminação de emergência</label>
+                <SimNao value={form.iluminacao_emergencia} onChange={v => setForm(f => ({ ...f, iluminacao_emergencia: v }))} /></div>
+              <div><label className={lbl}>Hidrante / reserva de água</label>
+                <SimNao value={form.hidrante_reserva} onChange={v => setForm(f => ({ ...f, hidrante_reserva: v }))} /></div>
+              <div><label className={lbl}>Planta baixa / croqui</label>
+                <SimNao value={form.planta_baixa} onChange={v => setForm(f => ({ ...f, planta_baixa: v }))} /></div>
+              <div><label className={lbl}>Sistema fixo de combate</label>
+                <SimNao value={form.sistema_fixo_incendio} onChange={v => setForm(f => ({ ...f, sistema_fixo_incendio: v }))} /></div>
+              <div><label className={lbl}>Qual sistema fixo</label>
+                <input className={inp} placeholder="ex.: sprinklers" value={form.qual_sistema_fixo || ''} onChange={e => setForm(f => ({ ...f, qual_sistema_fixo: e.target.value }))} /></div>
+              <div><label className={lbl}>Instalação elétrica irregular</label>
+                <SimNao value={form.instalacao_irregular} onChange={v => setForm(f => ({ ...f, instalacao_irregular: v }))} /></div>
+              <div className="flex gap-2">
+                <div className="flex-1"><label className={lbl}>Usa GLP</label>
+                  <SimNao value={form.possui_glp} onChange={v => setForm(f => ({ ...f, possui_glp: v }))} /></div>
+                <div className="flex-1"><label className={lbl}>GLP bem armazenado</label>
+                  <SimNao value={form.glp_armazenamento_ok} onChange={v => setForm(f => ({ ...f, glp_armazenamento_ok: v }))} /></div>
+              </div>
+
+              <div className="col-span-2 mt-2 pt-3 border-t"><p className="text-sm font-bold">Segurança e estabilidade estrutural</p></div>
+              <div><label className={lbl}>Estado de conservação</label>
+                <select className={inp} value={form.estrutura_conservacao || ''} onChange={e => setForm(f => ({ ...f, estrutura_conservacao: e.target.value || null }))}>
+                  <option value="">—</option><option>Bom</option><option>Regular</option><option>Ruim</option>
+                </select></div>
+              <div><label className={lbl}>Trincas / fissuras / rachaduras</label>
+                <select className={inp} value={form.estrutura_trincas || ''} onChange={e => setForm(f => ({ ...f, estrutura_trincas: e.target.value || null }))}>
+                  <option value="">—</option><option>Não</option><option value="Leves">Sim, leves</option><option value="Graves">Sim, graves</option>
+                </select></div>
+              <div><label className={lbl}>Infiltração / umidade</label>
+                <SimNao value={form.estrutura_infiltracao} onChange={v => setForm(f => ({ ...f, estrutura_infiltracao: v }))} /></div>
+              <div><label className={lbl}>Cobertura/telhado em boas condições</label>
+                <SimNao value={form.estrutura_cobertura_ok} onChange={v => setForm(f => ({ ...f, estrutura_cobertura_ok: v }))} /></div>
+              <div className="col-span-2"><label className={lbl}>Observação estrutural</label>
+                <input className={inp} placeholder="ex.: fissura na parede lateral da cozinha" value={form.estrutura_obs || ''} onChange={e => setForm(f => ({ ...f, estrutura_obs: e.target.value }))} /></div>
+
+              <div className="col-span-2 mt-2 pt-3 border-t"></div>
               <div className="col-span-2"><label className={lbl}>Descrição Técnica</label>
                 <textarea rows={3} className={inp} value={form.descricao_tecnica || ''} onChange={e => setForm(f => ({ ...f, descricao_tecnica: e.target.value }))} /></div>
               <div className="col-span-2"><label className={lbl}>Observações</label>
