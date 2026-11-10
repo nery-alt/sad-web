@@ -5,7 +5,7 @@ import { SERVIDORES } from '../lib/requerimentoAlvara'
 import { VISTOS, gerarLaudoAlvara, nomeArquivoLaudo, recortarFoto, reduzirFoto } from '../lib/laudoAlvara'
 import {
   PARECERES, PRAZOS, type Parecer, type ChecklistAlvara,
-  textoCaracterizacao, textoCondicoes, textoConclusao, textoParecer, pendencias, sugerirParecer,
+  textoCaracterizacao, textoCondicoes, textoConclusao, textoParecer, pendencias, sugerirParecer, checklistFaltando,
 } from '../lib/laudoTextos'
 
 export interface AlvaraLaudo extends ChecklistAlvara {
@@ -33,6 +33,14 @@ export interface AlvaraLaudo extends ChecklistAlvara {
 interface Foto { id: number; alvara_id: number; ordem: number; url: string; legenda: string | null }
 
 const RISCOS = ['Baixo', 'Médio', 'Alto']
+
+// "salao" -> "Salao." (primeira letra maiúscula e ponto final)
+const ajeitarLegenda = (t: string) => {
+  const s = t.trim().replace(/\s+/g, ' ')
+  if (!s) return s
+  const c = s.charAt(0).toUpperCase() + s.slice(1)
+  return /[.!?)]$/.test(c) ? c : c + '.'
+}
 const hojeISO = () => new Date().toLocaleDateString('sv-SE')
 const inp = 'w-full p-2 border border-gray-200 rounded text-sm outline-none focus:ring-2 focus:ring-primary-btn/20'
 const lbl = 'block text-xs font-bold text-text-secondary uppercase mb-1'
@@ -46,7 +54,7 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
   const [risco, setRisco] = useState(a.classificacao_risco || '')
   const [parecer, setParecer] = useState<Parecer>(parecerInicial)
   const [prazo, setPrazo] = useState(a.prazo_adequacao || 30)
-  const [caract, setCaract] = useState(a.caracterizacao || textoCaracterizacao(a))
+  const [caract, setCaract] = useState(a.caracterizacao || textoCaracterizacao(a, a.classificacao_risco))
   const [condicoes, setCondicoes] = useState(textoCondicoes(a).join('\n\n'))
   const [ressalvas, setRessalvas] = useState(a.ressalvas || pendencias(a).join('\n'))
   const [conclusao, setConclusao] = useState(textoConclusao(parecerInicial))
@@ -70,14 +78,18 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
   }
 
   const itensRessalva = useMemo(() => ressalvas.split('\n').map(s => s.trim().replace(/^\d+[.)-]\s*/, '')).filter(Boolean), [ressalvas])
-  const parecerTexto = useMemo(() => textoParecer(parecer, itensRessalva, prazo, !!a.possui_glp), [parecer, itensRessalva, prazo, a.possui_glp])
+  const parecerTexto = useMemo(() => textoParecer(parecer, itensRessalva, prazo, a), [parecer, itensRessalva, prazo, a])
 
   const mudarParecer = (p: Parecer) => { setParecer(p); setConclusao(textoConclusao(p)) }
+  const mudarRisco = (r: string) => {
+    if (caract === textoCaracterizacao(a, risco)) setCaract(textoCaracterizacao(a, r))
+    setRisco(r)
+  }
 
   const refazerTextos = () => {
     if (!window.confirm('Refazer os textos a partir do checklist? O que você editou nesta tela será substituído.')) return
     const p = sugerirParecer(a)
-    setCaract(textoCaracterizacao(a)); setCondicoes(textoCondicoes(a).join('\n\n'))
+    setCaract(textoCaracterizacao(a, risco)); setCondicoes(textoCondicoes(a).join('\n\n'))
     setRessalvas(pendencias(a).join('\n')); setParecer(p); setConclusao(textoConclusao(p))
   }
 
@@ -122,20 +134,32 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
   }
 
   // ---------- Gerar ----------
+  const checklist = checklistFaltando(a)
+  const cadastro = [
+    !(a.cnpj || a.cpf_responsavel) && 'CPF/CNPJ', !a.telefone && 'telefone', !a.endereco && 'endereço',
+    !a.area_total && 'área', !a.capacidade_pessoas && 'capacidade', !a.classificacao_porte && 'porte',
+    (a.gps_lat == null || a.gps_lng == null) && 'coordenadas GPS',
+  ].filter(Boolean) as string[]
+  const pend = pendencias(a)
   const faltando = [
+    checklist.length > 0 && `checklist (${checklist.join(', ')}) — preencha em Editar`,
     !risco && 'o grau de risco',
     (parecer !== 'Favorável' && itensRessalva.length === 0) && 'as adequações/irregularidades',
     fotos.some(f => !(f.legenda || '').trim()) && 'a legenda de alguma foto',
   ].filter(Boolean) as string[]
 
   const gerar = async () => {
-    if (faltando.length) { alert('Falta preencher: ' + faltando.join(', ') + '.'); return }
+    if (faltando.length) { alert('Falta preencher: ' + faltando.join('; ') + '.'); return }
+    const avisoCoerencia =
+      parecer === 'Favorável' && pend.length ? `\n\nATENÇÃO: o checklist aponta ${pend.length} problema(s), mas o parecer é FAVORÁVEL.` :
+      parecer !== 'Favorável' && !pend.length ? `\n\nATENÇÃO: o checklist não aponta nenhum problema, mas o parecer é ${parecer.toUpperCase()}.` : ''
+    if (!window.confirm(`Gerar o laudo com parecer ${parecer.toUpperCase()}?${avisoCoerencia}`)) return
     setGerando(true)
     try {
       const fotosLaudo = []
       for (const f of [...fotos].sort((x, y) => x.ordem - y.ordem)) {
         const blob = await (await fetch(f.url)).blob()
-        fotosLaudo.push({ bytes: await recortarFoto(blob), legenda: f.legenda || '' })
+        fotosLaudo.push({ bytes: await recortarFoto(blob), legenda: ajeitarLegenda(f.legenda || '') })
       }
       const gps = a.gps_lat != null && a.gps_lng != null ? `${a.gps_lat.toFixed(6)}, ${a.gps_lng.toFixed(6)}` : null
       const doc = await gerarLaudoAlvara({
@@ -211,10 +235,21 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
         </div>
 
         <div className="overflow-y-auto p-4 space-y-4 text-sm">
+          {checklist.length > 0 && (
+            <p className="text-xs text-error-expired bg-error-expired/5 border border-error-expired/30 rounded p-2">
+              <b>Checklist incompleto:</b> {checklist.join(', ')}. Feche esta tela, clique em <b>Editar</b> no alvará e preencha o checklist. Sem isso o laudo não é gerado.
+            </p>
+          )}
+          {cadastro.length > 0 && (
+            <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded p-2">
+              Falta no cadastro: {cadastro.join(', ')}. Essas linhas não vão aparecer no laudo.
+            </p>
+          )}
+
           {/* Escolhas */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div><label className={lbl}>Grau de risco *</label>
-              <select className={inp} value={risco} onChange={e => setRisco(e.target.value)}>
+              <select className={inp} value={risco} onChange={e => mudarRisco(e.target.value)}>
                 <option value="">—</option>{RISCOS.map(r => <option key={r}>{r}</option>)}
               </select></div>
             <div><label className={lbl}>Visto</label>
@@ -249,8 +284,11 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
                 </select>
               )}
             </div>
-            {sugerirParecer(a) !== parecer && (
-              <p className="text-[11px] text-text-secondary mt-1">Pelo checklist, o sugerido seria: <b>{sugerirParecer(a)}</b>.</p>
+            <div className={`mt-2 p-2 rounded text-sm font-bold text-center ${parecer === 'Favorável' ? 'bg-success/10 text-success' : parecer === 'Desfavorável' ? 'bg-error-expired/10 text-error-expired' : 'bg-yellow-100 text-yellow-800'}`}>
+              O laudo vai sair: {parecer.toUpperCase()}
+            </div>
+            {checklist.length === 0 && sugerirParecer(a) !== parecer && (
+              <p className="text-[11px] text-yellow-700 mt-1">Pelo checklist, o sugerido seria: <b>{sugerirParecer(a)}</b>.</p>
             )}
           </div>
 
