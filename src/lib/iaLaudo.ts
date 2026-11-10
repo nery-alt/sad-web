@@ -5,7 +5,9 @@ const SENTINELA_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 
 export type TipoIA = 'laudo_caracterizacao' | 'laudo_condicoes' | 'laudo_conclusao' | 'laudo_legendas'
 
-export async function iaLaudo(tipo: TipoIA, base: string, anotacoes = ''): Promise<string> {
+export interface RespostaIA { texto: string; conflitos: string[] }
+
+export async function iaLaudo(tipo: TipoIA, base: string, anotacoes = ''): Promise<RespostaIA> {
   const resp = await fetch(`${SENTINELA_URL}/functions/v1/gerar-texto`, {
     method: 'POST',
     headers: {
@@ -19,5 +21,6 @@ export async function iaLaudo(tipo: TipoIA, base: string, anotacoes = ''): Promi
   if (!resp.ok || dados.error) throw new Error(dados.error || `A IA não respondeu (${resp.status}).`)
   const texto = String(dados.texto || '').trim()
   if (!texto) throw new Error('A IA devolveu um texto vazio.')
-  return texto
+  const conflitos = Array.isArray(dados.conflitos) ? dados.conflitos.map(String).filter(Boolean) : []
+  return { texto, conflitos }
 }
