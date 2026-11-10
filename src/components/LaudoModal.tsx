@@ -108,12 +108,18 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
       condicoes: { tipo: 'laudo_condicoes' as TipoIA, valor: condicoes, set: setCondicoes },
       conclusao: { tipo: 'laudo_conclusao' as TipoIA, valor: conclusao, set: setConclusao },
     }[campo]
-    if (!mapa.valor.trim() && !anotacoes.trim()) { alert('Não há texto nem anotações para a IA trabalhar.'); return }
+    if (!mapa.valor.trim() && !(campo === 'condicoes' && anotacoes.trim())) { alert('Não há texto para a IA trabalhar.'); return }
     setIaOcupada(campo)
     try {
-      const novo = await iaLaudo(mapa.tipo, mapa.valor, campo === 'conclusao' ? '' : anotacoes)
+      // a caracterização descreve só o imóvel: não recebe as anotações de campo
+      const { texto: novo, conflitos } = await iaLaudo(mapa.tipo, mapa.valor, campo === 'condicoes' ? anotacoes : '')
       setDesfazer(d => ({ ...d, [campo]: mapa.valor }))
       mapa.set(novo)
+      if (conflitos.length) {
+        alert('A IA encontrou pontos que NÃO entraram no texto:\n\n• ' + conflitos.join('\n• ') +
+          '\n\nSe a anotação estiver certa, feche esta tela, corrija o checklist em Editar (ex.: "Extintor em local adequado: Não") ' +
+          'e depois use "Refazer pelo checklist". Exigências como "instalar" ou "adequar" vão no parecer com ressalvas.')
+      }
     } catch (e) {
       alert('IA: ' + (e instanceof Error ? e.message : String(e)) + ' Seu texto foi mantido.')
     } finally {
@@ -133,7 +139,7 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
     if (!comLegenda.length) { alert('Nenhuma legenda para corrigir.'); return }
     setIaOcupada('legendas')
     try {
-      const linhas = (await iaLaudo('laudo_legendas', comLegenda.map(f => (f.legenda || '').trim()).join('\n')))
+      const linhas = (await iaLaudo('laudo_legendas', comLegenda.map(f => (f.legenda || '').trim()).join('\n'))).texto
         .split('\n').map(l => l.trim()).filter(Boolean)
       if (linhas.length !== comLegenda.length) throw new Error('a IA devolveu uma quantidade diferente de legendas.')
       for (let i = 0; i < comLegenda.length; i++) await salvarLegenda(comLegenda[i], linhas[i])
@@ -150,7 +156,7 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
       )}
       <button type="button" onClick={() => melhorar(campo)} disabled={iaOcupada !== null}
         className="flex items-center gap-1 text-[11px] text-purple-700 hover:underline font-bold disabled:opacity-50">
-        <Sparkles size={12} /> {iaOcupada === campo ? 'Escrevendo…' : 'Melhorar com IA'}
+        <Sparkles size={12} /> {iaOcupada === campo ? 'Escrevendo…' : iaOcupada ? 'aguarde…' : 'Melhorar com IA'}
       </button>
     </span>
   )
@@ -361,7 +367,7 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
             <p className="text-[11px] text-text-secondary">Texto entre <b>**asteriscos**</b> sai em negrito no Word. Um parágrafo por bloco (deixe uma linha em branco entre eles).</p>
             <button type="button" onClick={refazerTextos} className="flex items-center gap-1 text-xs text-primary-btn hover:underline shrink-0"><RotateCcw size={12} /> Refazer pelo checklist</button>
           </div>
-          <div><label className={lbl}>Anotações da equipe em campo (a IA usa ao melhorar os textos)</label>
+          <div><label className={lbl}>Anotações da equipe em campo (a IA usa nas Condições observadas)</label>
             <textarea rows={3} className={inp} placeholder="ex.: fiação exposta perto do freezer; extintor atrás da porta da cozinha" value={anotacoes} onChange={e => setAnotacoes(e.target.value)} /></div>
           <div><div className="flex items-center justify-between"><label className={lbl}>Caracterização do imóvel</label>{botaoIA('caract')}</div>
             <textarea rows={3} className={inp} value={caract} onChange={e => setCaract(e.target.value)} /></div>
