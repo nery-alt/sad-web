@@ -1,7 +1,7 @@
 // IA do laudo: usa a mesma IA do aplicativo Sentinela DC (Edge Function "gerar-texto" no Supabase do Sentinela).
 // A chave abaixo é a chave PÚBLICA (anon) do Sentinela — a chave da Anthropic fica só no servidor.
 const SENTINELA_URL = 'https://rvouhrzqcuejpbyjirrg.supabase.co'
-const SENTINELA_ANON_KEY = 'COLE_AQUI_A_CHAVE_ANON_DO_SENTINELA'
+const SENTINELA_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2b3VocnpxY3VlanBieWppcnJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTg4MzMsImV4cCI6MjA5Mjc5NDgzM30.-_Pg5x2ppzRT4z_ZtiW4f8_LhsBbjLtXmsK6hFSp-IU'
 
 export type TipoIA = 'laudo_caracterizacao' | 'laudo_condicoes' | 'laudo_conclusao' | 'laudo_legendas'
 
