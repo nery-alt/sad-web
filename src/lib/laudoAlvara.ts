@@ -154,6 +154,11 @@ export async function gerarLaudoAlvara(d: DadosLaudo): Promise<Blob> {
         xml = xml.slice(0, ini) + trecho + xml.slice(fimA)
       }
     }
+    // legendas alinhadas à esquerda (no modelo algumas estavam justificadas e ficavam "esticadas")
+    {
+      const ini = xml.indexOf('{{ANEXO_INI}}'), fimA = xml.indexOf('{{ANEXO_FIM}}')
+      xml = xml.slice(0, ini) + xml.slice(ini, fimA).replace(/<w:jc w:val="(both|distribute)"\/>/g, '<w:jc w:val="left"/>') + xml.slice(fimA)
+    }
     xml = trocarParagrafo(xml, '{{ANEXO_INI}}', [`<w:r><w:br w:type="page"/></w:r>`])
     xml = trocarParagrafo(xml, '{{ANEXO_FIM}}', [''])
   }
