@@ -34,13 +34,18 @@ export interface ChecklistAlvara {
 const dois = (n: number) => String(n).padStart(2, '0')
 const minusc = (s: string | null) => (s || '').trim().toLowerCase()
 
-export function textoCaracterizacao(a: ChecklistAlvara): string {
+const POTENCIAL: Record<string, string> = { Baixo: 'baixo potencial de risco', 'Médio': 'médio potencial de risco', Alto: 'elevado potencial de risco' }
+
+export function textoCaracterizacao(a: ChecklistAlvara & { classificacao_porte?: string | null }, risco?: string | null): string {
   const tipo = minusc(a.tipo_estabelecimento) || 'atividade comercial'
-  const partes = [`Trata-se de estabelecimento destinado à atividade de ${tipo}, localizado em área urbana`]
-  if (a.area_total) partes.push(`com área total de ${a.area_total} m²`)
-  if (a.capacidade_pessoas) partes.push(`e capacidade estimada para atendimento de até ${a.capacidade_pessoas} pessoas`)
-  return partes.join(', ').replace(', e capacidade', ' e capacidade') +
-    ', apresentando estrutura compatível com a atividade exercida.'
+  const porte = minusc(a.classificacao_porte || null)
+  let t = `Trata-se de estabelecimento comercial${porte ? ` de ${porte} porte` : ''} destinado à atividade de ${tipo}, instalado em edificação compatível com a atividade desenvolvida`
+  const medidas: string[] = []
+  if (a.area_total) medidas.push(`área total de ${a.area_total} m²`)
+  if (a.capacidade_pessoas) medidas.push(`capacidade estimada para ${dois(a.capacidade_pessoas)} pessoas`)
+  if (medidas.length) t += `, com ${medidas.join(' e ')}`
+  const pot = risco ? POTENCIAL[risco] : ''
+  return t + (pot ? `, apresentando ${pot}.` : '.')
 }
 
 // Um parágrafo por item observado
@@ -49,48 +54,46 @@ export function textoCondicoes(a: ChecklistAlvara): string[] {
 
   // Extintores
   if (a.possui_extintor === false) {
-    p.push('Durante a inspeção técnica constatou-se que o estabelecimento **não possui extintores de incêndio**.')
+    p.push('Durante a inspeção técnica verificou-se que o estabelecimento **não dispõe de extintores de incêndio**.')
   } else if (a.possui_extintor) {
     const q = a.qtd_extintores || 1
     const pl = q > 1
-    const tipo = (a.tipo_extintor || 'pó ABC').trim()
-    const base = `Durante a inspeção técnica constatou-se que o estabelecimento possui **${dois(q)} ${pl ? 'extintores' : 'extintor'} de incêndio do tipo ${tipo}**`
+    const tipo = (a.tipo_extintor || 'Pó Químico ABC').trim()
+    const base = `Durante a inspeção técnica verificou-se que o estabelecimento dispõe de **${dois(q)} ${pl ? 'extintores' : 'extintor'} de incêndio do tipo ${tipo}**`
     const problemas: string[] = []
     if (a.extintor_validade === false) problemas.push(`com prazo de validade **vencido**`)
     if (a.extintor_localizacao_ok === false) problemas.push(`instalado${pl ? 's' : ''} em **local inadequado**`)
     if (problemas.length === 0) {
-      p.push(`${base}, devidamente instalado${pl ? 's' : ''}, em ${pl ? 'locais adequados' : 'local adequado'} e dentro do prazo de validade.`)
+      const ok: string[] = []
+      if (a.extintor_localizacao_ok) ok.push(`instalado${pl ? 's' : ''} em ${pl ? 'locais adequados' : 'local adequado'}`)
+      ok.push(`devidamente sinalizado${pl ? 's' : ''}`)
+      if (a.extintor_validade) ok.push('dentro do prazo de validade')
+      p.push(`${base}, ${juntar(ok)}.`)
     } else {
       p.push(`${base}; entretanto, ${pl ? 'os equipamentos encontram-se' : 'o equipamento encontra-se'} ${problemas.join(' e ')}.`)
     }
   }
 
-  // Saídas e rotas de fuga
-  if (a.saida_desobstruida !== null || a.rotas_fuga_ok !== null) {
-    if (a.saida_desobstruida !== false && a.rotas_fuga_ok !== false) {
-      p.push('As rotas de fuga e saídas de emergência encontram-se desobstruídas, com circulação adequada para evacuação em situação de emergência.')
-    } else {
+  // Sinalização, saídas e rotas de fuga
+  const sin = a.sinalizacao_emergencia, sai = a.saida_desobstruida, rot = a.rotas_fuga_ok
+  if (sin && sai !== false && rot !== false && (sai || rot)) {
+    p.push('A edificação possui **sinalização de emergência**, saída de emergência desobstruída e rota de fuga compatível com as dimensões do imóvel, proporcionando condições adequadas para evacuação em caso de necessidade.')
+  } else {
+    if (sai === false || rot === false) {
       const f: string[] = []
-      if (a.saida_desobstruida === false) f.push('**saída de emergência obstruída**')
-      if (a.rotas_fuga_ok === false) f.push('**rotas de fuga inadequadas**')
+      if (sai === false) f.push('**saída de emergência obstruída**')
+      if (rot === false) f.push('**rotas de fuga inadequadas**')
       p.push(`Foi constatada ${f.join(' e ')}, comprometendo a evacuação segura em situação de emergência.`)
+    } else if (sai || rot) {
+      p.push('A saída de emergência encontra-se desobstruída, com rota de fuga compatível com as dimensões do imóvel, proporcionando condições adequadas para evacuação em caso de necessidade.')
     }
+    if (sin) p.push('A edificação possui **sinalização de emergência**.')
+    if (sin === false) p.push('A edificação **não possui sinalização de emergência**.')
   }
 
-  // Sinalização e iluminação de emergência
-  const sin = a.sinalizacao_emergencia, ilu = a.iluminacao_emergencia
-  if (sin !== null || ilu !== null) {
-    if (sin && ilu) {
-      p.push('O imóvel possui **sinalização de emergência**, bem como sistema de **iluminação de emergência** em funcionamento, atendendo às condições mínimas de segurança para o porte da atividade.')
-    } else if (sin === false && ilu === false) {
-      p.push('O imóvel **não possui sinalização de emergência nem iluminação de emergência**.')
-    } else {
-      if (sin) p.push('O imóvel possui **sinalização de emergência**.')
-      if (sin === false) p.push('O imóvel **não possui sinalização de emergência**.')
-      if (ilu) p.push('Foi constatada a existência de **iluminação de emergência** em funcionamento.')
-      if (ilu === false) p.push('O imóvel **não possui sistema de iluminação de emergência**.')
-    }
-  }
+  // Iluminação de emergência
+  if (a.iluminacao_emergencia) p.push('Foi constatada a existência de **iluminação de emergência** em funcionamento, contribuindo para a segurança dos ocupantes durante eventual interrupção do fornecimento de energia elétrica.')
+  if (a.iluminacao_emergencia === false) p.push('O imóvel **não possui sistema de iluminação de emergência**.')
 
   // Hidrante / reserva de água / sistema fixo
   if (a.hidrante_reserva) {
@@ -101,34 +104,35 @@ export function textoCondicoes(a: ChecklistAlvara): string[] {
     p.push(`O imóvel dispõe de **sistema fixo de combate a incêndio**${qual ? ` (${qual})` : ''}.`)
   }
 
-  // Instalações elétricas + GLP
-  const ele = a.instalacao_irregular === true
-    ? 'Foram identificadas **irregularidades nas instalações elétricas**, que representam risco de princípio de incêndio'
-    : a.instalacao_irregular === false ? 'Não foram identificadas irregularidades aparentes nas instalações elétricas' : ''
-  let glp = ''
-  if (a.possui_glp === false) glp = 'o estabelecimento não utiliza GLP'
-  else if (a.possui_glp && a.glp_armazenamento_ok !== false) glp = 'o estabelecimento utiliza **GLP**, sendo verificado que o armazenamento encontra-se realizado de forma adequada e em conformidade com as recomendações básicas de segurança'
-  else if (a.possui_glp) glp = 'o estabelecimento utiliza **GLP com armazenamento inadequado**, em desacordo com as recomendações básicas de segurança'
-  if (ele && glp) p.push(`${ele}, e ${glp}.`)
-  else if (ele) p.push(`${ele}.`)
-  else if (glp) p.push(glp.charAt(0).toUpperCase() + glp.slice(1) + '.')
+  // Instalações elétricas + GLP (mesmo parágrafo)
+  const eg: string[] = []
+  if (a.instalacao_irregular === false) eg.push('As instalações elétricas apresentaram condições satisfatórias, não sendo observadas irregularidades aparentes durante a vistoria.')
+  if (a.instalacao_irregular === true) eg.push('Foram identificadas **irregularidades nas instalações elétricas**, que representam risco de princípio de incêndio.')
+  if (a.possui_glp === false) eg.push('O estabelecimento não utiliza GLP, reduzindo os riscos associados à presença de gases inflamáveis.')
+  else if (a.possui_glp && a.glp_armazenamento_ok !== false) eg.push('O estabelecimento utiliza **GLP**, sendo verificado que o armazenamento encontra-se realizado de forma adequada e em conformidade com as recomendações básicas de segurança.')
+  else if (a.possui_glp) eg.push('O estabelecimento utiliza **GLP com armazenamento inadequado**, em desacordo com as recomendações básicas de segurança.')
+  if (eg.length) p.push(eg.join(' '))
 
   // Planta baixa
   if (a.planta_baixa) p.push('A documentação técnica apresentada inclui planta baixa/croqui da edificação.')
 
-  // Estabilidade estrutural
-  p.push(textoEstrutura(a))
+  // Estabilidade estrutural (só entra se foi avaliada)
+  const est = textoEstrutura(a)
+  if (est) p.push(est)
   return p
 }
 
 export function textoEstrutura(a: ChecklistAlvara): string {
-  const cons = a.estrutura_conservacao || 'Bom'
+  if (!a.estrutura_conservacao) return ''   // não avaliado: não afirma nada
+  const cons = a.estrutura_conservacao
   const trinc = a.estrutura_trincas || 'Não'
   const obs = (a.estrutura_obs || '').trim()
   const tudoOk = cons === 'Bom' && trinc === 'Não' && a.estrutura_infiltracao !== true && a.estrutura_cobertura_ok !== false
   let t: string
   if (tudoOk) {
-    t = 'Quanto à estabilidade estrutural, verificou-se que o imóvel apresenta boas condições de conservação, sem presença de trincas, fissuras ou qualquer anomalia estrutural aparente no momento da vistoria.'
+    t = a.estrutura_trincas === 'Não'
+      ? 'Quanto à estabilidade estrutural, verificou-se que o imóvel apresenta boas condições de conservação, sem presença de trincas, fissuras ou qualquer anomalia estrutural aparente no momento da vistoria.'
+      : 'Quanto à estabilidade estrutural, verificou-se que o imóvel apresenta boas condições de conservação, não sendo identificados indícios aparentes de comprometimento estrutural.'
   } else {
     const estado = cons === 'Ruim' ? '**estado precário de conservação**' : cons === 'Regular' ? '**estado regular de conservação**' : 'boas condições de conservação'
     const itens: string[] = []
@@ -163,6 +167,19 @@ export function pendencias(a: ChecklistAlvara): string[] {
   return l
 }
 
+// Itens mínimos que precisam ter sido avaliados para o laudo poder ser gerado
+export function checklistFaltando(a: ChecklistAlvara): string[] {
+  const f: string[] = []
+  if (a.possui_extintor == null) f.push('extintor')
+  if (a.possui_extintor && (a.extintor_validade == null || a.extintor_localizacao_ok == null)) f.push('validade/local do extintor')
+  if (a.saida_desobstruida == null && a.rotas_fuga_ok == null) f.push('saídas de emergência')
+  if (a.sinalizacao_emergencia == null && a.iluminacao_emergencia == null) f.push('sinalização ou iluminação de emergência')
+  if (a.instalacao_irregular == null) f.push('instalação elétrica')
+  if (!a.estrutura_conservacao) f.push('estado de conservação')
+  if (!a.estrutura_trincas) f.push('trincas/fissuras')
+  return f
+}
+
 export function sugerirParecer(a: ChecklistAlvara): Parecer {
   const l = pendencias(a)
   if (l.length === 0) return 'Favorável'
@@ -178,9 +195,13 @@ export function textoConclusao(parecer: Parecer): string {
 }
 
 // Parágrafos do Parecer Técnico
-export function textoParecer(parecer: Parecer, itens: string[], prazoDias: number, usaGlp: boolean): string[] {
+export function textoParecer(parecer: Parecer, itens: string[], prazoDias: number, a: ChecklistAlvara): string[] {
   if (parecer === 'Favorável') {
-    return [`Diante do exposto, o parecer técnico é **FAVORÁVEL À EMISSÃO DO ALVARÁ DE FUNCIONAMENTO**, devendo o responsável manter as condições atuais de segurança, realizar inspeções periódicas dos equipamentos de combate a incêndio${usaGlp ? ', manter o correto armazenamento do GLP' : ''} e preservar as condições de conservação da edificação.`]
+    const manter = ['dos equipamentos de combate a incêndio']
+    if (a.iluminacao_emergencia) manter.push('da iluminação de emergência')
+    if (a.instalacao_irregular === false) manter.push('das instalações elétricas')
+    if (a.possui_glp) manter.push('do correto armazenamento do GLP')
+    return [`Diante das condições observadas, o parecer técnico é **FAVORÁVEL À EMISSÃO DO ALVARÁ DE FUNCIONAMENTO**, recomendando-se a manutenção periódica ${juntar(manter)}, preservando as condições de segurança e de conservação da edificação verificadas durante a vistoria.`]
   }
   const lista = itens.map((t, i) => `${i + 1}. ${t}`)
   if (parecer === 'Favorável com ressalvas') {
