@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { X, FileDown, RotateCcw, ImagePlus, Trash2 } from 'lucide-react'
+import { X, FileDown, RotateCcw, ImagePlus, Trash2, Sparkles, Undo2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { SERVIDORES } from '../lib/requerimentoAlvara'
+import { iaLaudo, type TipoIA } from '../lib/iaLaudo'
 import { VISTOS, gerarLaudoAlvara, nomeArquivoLaudo, recortarFoto, reduzirFoto } from '../lib/laudoAlvara'
 import {
   PARECERES, PRAZOS, type Parecer, type ChecklistAlvara,
@@ -28,6 +29,7 @@ export interface AlvaraLaudo extends ChecklistAlvara {
   ressalvas: string | null
   prazo_adequacao: number | null
   nome_vistoriador: string | null
+  observacoes: string | null
 }
 
 interface Foto { id: number; alvara_id: number; ordem: number; url: string; legenda: string | null }
@@ -63,6 +65,9 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
   const [gerando, setGerando] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const [slotAlvo, setSlotAlvo] = useState<number | null>(null)
+  const [anotacoes, setAnotacoes] = useState(a.observacoes || '')
+  const [iaOcupada, setIaOcupada] = useState<string | null>(null)
+  const [desfazer, setDesfazer] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let ativo = true
@@ -95,6 +100,60 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
 
   const toggleAssinante = (id: string) => setAssinantes(prev =>
     prev.includes(id) ? (prev.length > 1 ? prev.filter(x => x !== id) : prev) : [...prev, id])
+
+  // ---------- IA ----------
+  const melhorar = async (campo: 'caract' | 'condicoes' | 'conclusao') => {
+    const mapa = {
+      caract: { tipo: 'laudo_caracterizacao' as TipoIA, valor: caract, set: setCaract },
+      condicoes: { tipo: 'laudo_condicoes' as TipoIA, valor: condicoes, set: setCondicoes },
+      conclusao: { tipo: 'laudo_conclusao' as TipoIA, valor: conclusao, set: setConclusao },
+    }[campo]
+    if (!mapa.valor.trim() && !anotacoes.trim()) { alert('Não há texto nem anotações para a IA trabalhar.'); return }
+    setIaOcupada(campo)
+    try {
+      const novo = await iaLaudo(mapa.tipo, mapa.valor, campo === 'conclusao' ? '' : anotacoes)
+      setDesfazer(d => ({ ...d, [campo]: mapa.valor }))
+      mapa.set(novo)
+    } catch (e) {
+      alert('IA: ' + (e instanceof Error ? e.message : String(e)) + ' Seu texto foi mantido.')
+    } finally {
+      setIaOcupada(null)
+    }
+  }
+  const voltar = (campo: 'caract' | 'condicoes' | 'conclusao') => {
+    const antigo = desfazer[campo]
+    if (antigo === undefined) return
+    if (campo === 'caract') setCaract(antigo)
+    if (campo === 'condicoes') setCondicoes(antigo)
+    if (campo === 'conclusao') setConclusao(antigo)
+    setDesfazer(d => { const n = { ...d }; delete n[campo]; return n })
+  }
+  const corrigirLegendas = async () => {
+    const comLegenda = [...fotos].sort((x, y) => x.ordem - y.ordem).filter(f => (f.legenda || '').trim())
+    if (!comLegenda.length) { alert('Nenhuma legenda para corrigir.'); return }
+    setIaOcupada('legendas')
+    try {
+      const linhas = (await iaLaudo('laudo_legendas', comLegenda.map(f => (f.legenda || '').trim()).join('\n')))
+        .split('\n').map(l => l.trim()).filter(Boolean)
+      if (linhas.length !== comLegenda.length) throw new Error('a IA devolveu uma quantidade diferente de legendas.')
+      for (let i = 0; i < comLegenda.length; i++) await salvarLegenda(comLegenda[i], linhas[i])
+    } catch (e) {
+      alert('IA: ' + (e instanceof Error ? e.message : String(e)) + ' As legendas foram mantidas.')
+    } finally {
+      setIaOcupada(null)
+    }
+  }
+  const botaoIA = (campo: 'caract' | 'condicoes' | 'conclusao') => (
+    <span className="flex items-center gap-2 normal-case">
+      {desfazer[campo] !== undefined && (
+        <button type="button" onClick={() => voltar(campo)} className="flex items-center gap-1 text-[11px] text-text-secondary hover:underline font-normal"><Undo2 size={11} /> Desfazer IA</button>
+      )}
+      <button type="button" onClick={() => melhorar(campo)} disabled={iaOcupada !== null}
+        className="flex items-center gap-1 text-[11px] text-purple-700 hover:underline font-bold disabled:opacity-50">
+        <Sparkles size={12} /> {iaOcupada === campo ? 'Escrevendo…' : 'Melhorar com IA'}
+      </button>
+    </span>
+  )
 
   // ---------- Fotos ----------
   const escolherFoto = (ordem: number) => { setSlotAlvo(ordem); fileRef.current?.click() }
@@ -198,7 +257,7 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
       // guarda as escolhas e o laudo como anexo do alvará (segunda via)
       const avisos: string[] = []
       const { error: e1 } = await supabase.from('alvaras').update({
-        classificacao_risco: risco, caracterizacao: caract.trim(), parecer,
+        classificacao_risco: risco, caracterizacao: caract.trim(), parecer, observacoes: anotacoes.trim() || null,
         ressalvas: itensRessalva.join('\n') || null, prazo_adequacao: prazo,
       }).eq('id', a.id)
       if (e1) avisos.push('dados do laudo: ' + e1.message)
@@ -302,18 +361,27 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
             <p className="text-[11px] text-text-secondary">Texto entre <b>**asteriscos**</b> sai em negrito no Word. Um parágrafo por bloco (deixe uma linha em branco entre eles).</p>
             <button type="button" onClick={refazerTextos} className="flex items-center gap-1 text-xs text-primary-btn hover:underline shrink-0"><RotateCcw size={12} /> Refazer pelo checklist</button>
           </div>
-          <div><label className={lbl}>Caracterização do imóvel</label>
+          <div><label className={lbl}>Anotações da equipe em campo (a IA usa ao melhorar os textos)</label>
+            <textarea rows={3} className={inp} placeholder="ex.: fiação exposta perto do freezer; extintor atrás da porta da cozinha" value={anotacoes} onChange={e => setAnotacoes(e.target.value)} /></div>
+          <div><div className="flex items-center justify-between"><label className={lbl}>Caracterização do imóvel</label>{botaoIA('caract')}</div>
             <textarea rows={3} className={inp} value={caract} onChange={e => setCaract(e.target.value)} /></div>
-          <div><label className={lbl}>Condições observadas na vistoria</label>
+          <div><div className="flex items-center justify-between"><label className={lbl}>Condições observadas na vistoria</label>{botaoIA('condicoes')}</div>
             <textarea rows={10} className={inp} value={condicoes} onChange={e => setCondicoes(e.target.value)} /></div>
-          <div><label className={lbl}>Conclusão técnica</label>
+          <div><div className="flex items-center justify-between"><label className={lbl}>Conclusão técnica</label>{botaoIA('conclusao')}</div>
             <textarea rows={3} className={inp} value={conclusao} onChange={e => setConclusao(e.target.value)} /></div>
+          <p className="text-[11px] text-text-secondary">A IA só reescreve o que está no texto e nas anotações — confira sempre antes de baixar. O parecer continua sendo escolha sua.</p>
           <div><label className={lbl}>Parecer técnico (sai assim no laudo)</label>
             <div className="p-2 bg-gray-50 border border-gray-200 rounded text-xs whitespace-pre-wrap">{parecerTexto.join('\n').replace(/\*\*/g, '')}</div></div>
 
           {/* Fotos */}
           <div>
-            <label className={lbl}>Fotos do anexo (até 4)</label>
+            <div className="flex items-center justify-between"><label className={lbl}>Fotos do anexo (até 4)</label>
+              {fotos.some(f => (f.legenda || '').trim()) && (
+                <button type="button" onClick={corrigirLegendas} disabled={iaOcupada !== null}
+                  className="flex items-center gap-1 text-[11px] text-purple-700 hover:underline font-bold disabled:opacity-50">
+                  <Sparkles size={12} /> {iaOcupada === 'legendas' ? 'Corrigindo…' : 'Corrigir legendas com IA'}
+                </button>
+              )}</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[1, 2, 3, 4].map(ordem => {
                 const f = fotos.find(x => x.ordem === ordem)
@@ -333,7 +401,7 @@ export const LaudoModal: React.FC<{ alvara: AlvaraLaudo; onClose: () => void; on
                       {f && <button type="button" onClick={() => removerFoto(f)} className="p-1 rounded hover:bg-error-expired/10 text-error-expired" title="Remover"><Trash2 size={13} /></button>}
                     </div>
                     {f && (
-                      <input key={f.id} className="w-full p-1 border border-gray-200 rounded text-xs" placeholder="Legenda (ex.: Salão de Festa)"
+                      <input key={`${f.id}-${f.legenda}`} className="w-full p-1 border border-gray-200 rounded text-xs" placeholder="Legenda (ex.: Salão de Festa)"
                         defaultValue={f.legenda || ''} onBlur={e => salvarLegenda(f, e.target.value.trim())} />
                     )}
                   </div>
