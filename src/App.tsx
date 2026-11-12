@@ -647,7 +647,7 @@ const App: React.FC = () => {
           {activeTab === 'Protocolos' && (
             <Protocolos
               protocolos={protocolos} pessoas={pessoas} tarefas={tarefas}
-              encaminhamentos={encaminhamentos}
+              encaminhamentos={encaminhamentos} documentos={documentos} onOpenFile={handleOpenFile}
               selectedProtocolo={selectedProtocolo} onSelectProtocolo={setSelectedProtocolo}
               onSaveProtocolo={handleSaveProtocolo} onDeleteProtocolo={handleDeleteProtocolo}
               onUpdateStatus={handleUpdateProtocoloStatus} onAddMovimentacao={handleAddMovimentacao}
