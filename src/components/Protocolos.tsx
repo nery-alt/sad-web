@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Plus, ArrowLeft, History, Send, Trash2, Search, Edit2, Phone, MapPin, CreditCard, CheckSquare, ExternalLink, X, FileText } from 'lucide-react'
-import type { Protocolo, Pessoa, Movimentacao, Tarefa, Encaminhamento } from '../types'
+import type { Protocolo, Pessoa, Movimentacao, Tarefa, Encaminhamento, DocumentoRecebido } from '../types'
 import { supabase } from '../lib/supabase'
 import { RelatorioVistoriaModal } from './RelatorioVistoriaModal'
 
@@ -9,6 +9,8 @@ interface ProtocolosProps {
   pessoas: Pessoa[]
   tarefas: Tarefa[]
   encaminhamentos: Encaminhamento[]
+  documentos: DocumentoRecebido[]
+  onOpenFile: (path: string) => void
   selectedProtocolo: Protocolo | null
   onSelectProtocolo: (protocolo: Protocolo | null) => void
   onSaveProtocolo: (protocolo: Protocolo) => void
@@ -57,7 +59,7 @@ function StepperStatus({ status }: { status: string }) {
 }
 
 export const Protocolos: React.FC<ProtocolosProps> = ({
-  protocolos, pessoas, tarefas, encaminhamentos,
+  protocolos, pessoas, tarefas, encaminhamentos, documentos, onOpenFile,
   selectedProtocolo, onSelectProtocolo,
   onSaveProtocolo, onDeleteProtocolo, onUpdateStatus,
   onAddMovimentacao, onNewTarefa,
@@ -123,6 +125,12 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
   const protocoloTarefas = useMemo(() =>
     !selectedProtocolo ? [] : tarefas.filter(t => t.protocolo_id === selectedProtocolo.id)
   , [tarefas, selectedProtocolo])
+
+  // Documentos do dossiê da pessoa (e os ligados a este protocolo): ficam guardados num lugar só
+  const protocoloDocumentos = useMemo(() =>
+    !selectedProtocolo ? [] : documentos.filter(d =>
+      d.protocolo_id === selectedProtocolo.id || (!!selectedProtocolo.pessoa_id && d.pessoa_id === selectedProtocolo.pessoa_id))
+  , [documentos, selectedProtocolo])
 
   const protocoloEncaminhamentos = useMemo(() =>
     !selectedProtocolo ? [] : encaminhamentos
@@ -442,6 +450,28 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
                       </div>
                     )
                   })}
+                </div>
+              )}
+            </div>
+
+            {/* Documentos (os mesmos do dossiê da pessoa) */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              <h3 className="font-bold text-sm mb-1 flex items-center gap-2"><FileText size={16} /> Documentos ({protocoloDocumentos.length})</h3>
+              <p className="text-[11px] text-text-secondary mb-3">Os mesmos do dossiê da pessoa. Para importar, use Pessoas / Dossiês.</p>
+              {protocoloDocumentos.length === 0 ? (
+                <p className="text-text-secondary italic text-sm">Nenhum documento.</p>
+              ) : (
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {protocoloDocumentos.map(d => (
+                    <button key={d.id} type="button" onClick={() => d.caminho && onOpenFile(d.caminho)} disabled={!d.caminho}
+                      className="w-full text-left text-xs p-2 px-3 rounded border border-gray-100 hover:border-primary-btn/40 hover:bg-primary-btn/5 flex justify-between items-center gap-2">
+                      <span className="truncate font-bold">{d.nome}</span>
+                      <span className="shrink-0 text-text-secondary flex items-center gap-1">
+                        {d.protocolo_id === selectedProtocolo.id && <span className="text-[9px] font-bold bg-primary-btn/10 text-primary-btn px-1 rounded">ESTE PROTOCOLO</span>}
+                        {d.data_recebimento ? formatDate(d.data_recebimento) : ''} <ExternalLink size={12} />
+                      </span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
