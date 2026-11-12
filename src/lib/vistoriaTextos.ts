@@ -118,9 +118,9 @@ export function textoConclusao(d: DadosVistoria, orgaos: OrgaoEscolhido[]): stri
 
 // Órgãos marcados que a Conclusão não cita (pela sigla ou pelo nome curto)
 export function orgaosForaDaConclusao(conclusao: string, orgaos: OrgaoEscolhido[]): string[] {
-  const t = conclusao.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase()
+  const t = conclusao.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
   return orgaos.filter(o => nomeOrgao(o)).map(o => nomeCurto(o))
-    .filter(n => !t.includes(n.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase()))
+    .filter(n => !t.includes(n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()))
 }
 
 // "120/2026" ou "120" -> "120/2026"

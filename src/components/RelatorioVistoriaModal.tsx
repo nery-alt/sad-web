@@ -298,7 +298,7 @@ export const RelatorioVistoriaModal: React.FC<{ protocolo: Protocolo; onClose: (
     // a Conclusão tem que encaminhar para os mesmos órgãos das Recomendações
     const fora = orgaosForaDaConclusao(conclusao, orgaos)
     if (fora.length) {
-      if (window.confirm(`A Conclusão não cita: ${fora.join(', ')}, que está nas Recomendações.\n\n` +
+      if (window.confirm(`A Conclusão não cita: ${fora.join(', ')}, que ${fora.length > 1 ? 'estão' : 'está'} nas Recomendações.\n\n` +
         'OK = trocar o último parágrafo da Conclusão pelo encaminhamento certo (confira e clique em Baixar Word de novo).\n' +
         'Cancelar = gerar assim mesmo.')) {
         const ps = paragrafos(conclusao)
@@ -340,7 +340,8 @@ export const RelatorioVistoriaModal: React.FC<{ protocolo: Protocolo; onClose: (
       document.body.appendChild(link); link.click(); link.remove()
       setTimeout(() => URL.revokeObjectURL(url), 2000)
 
-      // guarda os textos e uma segunda via do Word
+      // guarda os textos e o Word num lugar só: o dossiê da pessoa, ligado a este protocolo
+      // (aparece em Pessoas/Dossiês e no protocolo). Gerar de novo substitui a via anterior.
       const avisos: string[] = []
       const path = `vistorias/relatorios/${p.id}_${Date.now()}.docx`
       const { error: e1 } = await supabase.storage.from('documentos').upload(path, doc, { upsert: true })
@@ -348,7 +349,29 @@ export const RelatorioVistoriaModal: React.FC<{ protocolo: Protocolo; onClose: (
       if (e1) avisos.push('cópia do Word: ' + e1.message)
       const { error: e2 } = await supabase.from('relatorios_vistoria').upsert({ ...registro(), relatorio_url: pub }, { onConflict: 'protocolo_id' })
       if (e2) avisos.push('textos: ' + e2.message)
-      if (avisos.length) alert('O Word foi baixado, mas não consegui salvar no SAD: ' + avisos.join('; '))
+      if (pub) {
+        const hoje = new Date()
+        const dataRec = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`
+        const reg = {
+          pessoa_id: p.pessoa_id || null, protocolo_id: p.id, nome: nomeArq,
+          tipo: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          caminho: pub, descricao: `Relatório Técnico de Vistoria nº ${numero} (gerado no SAD)`, data_recebimento: dataRec,
+        }
+        // via anterior: o registro que aponta para a última cópia salva
+        const { data: antigo } = ultimaVia
+          ? await supabase.from('documentos_recebidos').select('id').eq('caminho', ultimaVia).maybeSingle()
+          : { data: null }
+        const { error: e3 } = antigo
+          ? await supabase.from('documentos_recebidos').update(reg).eq('id', (antigo as { id: number }).id)
+          : await supabase.from('documentos_recebidos').insert({ ...reg, criado_em: hoje.toISOString() })
+        if (e3) avisos.push('dossiê: ' + e3.message)
+        else if (ultimaVia && ultimaVia !== pub) {
+          // apaga o arquivo da via anterior (só se for uma cópia gerada aqui)
+          const velho = decodeURIComponent(ultimaVia.split('/documentos/')[1] || '')
+          if (velho.startsWith('vistorias/relatorios/')) await supabase.storage.from('documentos').remove([velho])
+        }
+      }
+      if (avisos.length) alert('O Word foi baixado, mas não consegui salvar tudo no SAD: ' + avisos.join('; '))
       onClose()
     } catch (e) {
       alert('Não foi possível gerar o relatório: ' + (e instanceof Error ? e.message : String(e)))
@@ -502,7 +525,7 @@ export const RelatorioVistoriaModal: React.FC<{ protocolo: Protocolo; onClose: (
         )}
 
         <div className="p-4 border-t flex items-center justify-between gap-2 flex-wrap">
-          <p className="text-[11px] text-text-secondary">{faltando.length ? <span className="text-yellow-700">Falta: {faltando.join(', ')}.</span> : 'Os textos e uma cópia do Word ficam guardados neste protocolo.'}</p>
+          <p className="text-[11px] text-text-secondary">{faltando.length ? <span className="text-yellow-700">Falta: {faltando.join(', ')}.</span> : 'O Word gerado fica salvo no dossiê da pessoa e aparece neste protocolo.'}</p>
           <div className="flex gap-2">
             <button onClick={salvarRascunho} disabled={carregando} className="px-4 py-2 border rounded-lg text-sm">Salvar rascunho</button>
             <button onClick={gerar} disabled={gerando || carregando}
