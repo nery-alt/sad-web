@@ -4,6 +4,7 @@ const SENTINELA_URL = 'https://rvouhrzqcuejpbyjirrg.supabase.co'
 const SENTINELA_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2b3VocnpxY3VlanBieWppcnJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMTg4MzMsImV4cCI6MjA5Mjc5NDgzM30.-_Pg5x2ppzRT4z_ZtiW4f8_LhsBbjLtXmsK6hFSp-IU'
 
 export type TipoIA = 'laudo_caracterizacao' | 'laudo_condicoes' | 'laudo_conclusao' | 'laudo_legendas'
+  | 'vistoria_objeto' | 'vistoria_situacao' | 'vistoria_recomendacoes' | 'vistoria_conclusao'
 
 export interface RespostaIA { texto: string; conflitos: string[] }
 

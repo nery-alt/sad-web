@@ -34,24 +34,24 @@ export interface DadosLaudo {
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
   'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 
-const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+export const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 const rPr = (negrito: boolean) =>
   '<w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>' +
   (negrito ? '<w:b/><w:bCs/>' : '') + '<w:color w:val="000000"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>'
 
-const run = (texto: string, negrito = false) =>
+export const run = (texto: string, negrito = false) =>
   `<w:r>${rPr(negrito)}<w:t xml:space="preserve">${esc(texto)}</w:t></w:r>`
-const quebra = `<w:r>${rPr(false)}<w:br/></w:r>`
+export const quebra = `<w:r>${rPr(false)}<w:br/></w:r>`
 
 // "texto **negrito** texto" -> runs
-function runsMarcados(texto: string): string {
+export function runsMarcados(texto: string): string {
   return texto.split(/(\*\*[^*]+\*\*)/).filter(Boolean)
     .map(p => p.startsWith('**') && p.endsWith('**') ? run(p.slice(2, -2), true) : run(p)).join('')
 }
 
 // Troca o parágrafo-marcador por N parágrafos com a mesma formatação
-function trocarParagrafo(xml: string, marcador: string, conteudos: string[]): string {
+export function trocarParagrafo(xml: string, marcador: string, conteudos: string[]): string {
   const i = xml.indexOf(`<w:t>${marcador}</w:t>`)
   if (i < 0) throw new Error(`Modelo do laudo sem o marcador ${marcador}`)
   const ini = xml.lastIndexOf('<w:p>', i)
@@ -62,12 +62,12 @@ function trocarParagrafo(xml: string, marcador: string, conteudos: string[]): st
   return xml.slice(0, ini) + novos + xml.slice(fim)
 }
 
-const linhasRotuladas = (linhas: [string, string | null | undefined][]) =>
+export const linhasRotuladas = (linhas: [string, string | null | undefined][]) =>
   linhas.filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '')
     .map(([r, v]) => run(`${r}:`, true) + run(` ${String(v).trim()}`)).join(quebra)
 
 // Tabela de assinaturas (sem bordas). Com uma pessoa só, a assinatura fica centralizada na página.
-function tabelaAssinaturas(pessoas: Servidor[]): string {
+export function tabelaAssinaturas(pessoas: Servidor[]): string {
   const sem = '<w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/>'
   const pr = (texto: string, negrito: boolean, depois = 0) =>
     `<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="${depois}" w:line="276" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>` +

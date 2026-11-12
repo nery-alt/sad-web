@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { Plus, ArrowLeft, History, Send, Trash2, Search, Edit2, Phone, MapPin, CreditCard, CheckSquare, ExternalLink, X } from 'lucide-react'
+import { Plus, ArrowLeft, History, Send, Trash2, Search, Edit2, Phone, MapPin, CreditCard, CheckSquare, ExternalLink, X, FileText } from 'lucide-react'
 import type { Protocolo, Pessoa, Movimentacao, Tarefa, Encaminhamento } from '../types'
 import { supabase } from '../lib/supabase'
+import { RelatorioVistoriaModal } from './RelatorioVistoriaModal'
 
 interface ProtocolosProps {
   protocolos: Protocolo[]
@@ -64,6 +65,7 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
   formatDate, getPrazoStatus,
 }) => {
   const [searchProtocolo, setSearchProtocolo] = useState('')
+  const [relatorioAberto, setRelatorioAberto] = useState(false)
   const [buscaPessoa, setBuscaPessoa] = useState('')
   const [mostrarListaPessoas, setMostrarListaPessoas] = useState(false)
   const buscaPessoaRef = useRef<HTMLDivElement>(null)
@@ -278,6 +280,7 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
 
     return (
       <div className="p-4 h-full overflow-y-auto">
+        {relatorioAberto && <RelatorioVistoriaModal protocolo={selectedProtocolo} onClose={() => setRelatorioAberto(false)} />}
         <button onClick={() => onSelectProtocolo(null)} className="flex items-center gap-2 text-primary-btn mb-4 hover:opacity-80 text-sm">
           <ArrowLeft size={18} /> Voltar
         </button>
@@ -289,6 +292,7 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
             <p className="text-text-secondary text-sm mt-1">{selectedProtocolo.assunto}</p>
           </div>
           <div className="flex gap-2">
+            <button onClick={() => setRelatorioAberto(true)} className="flex items-center gap-1 px-3 py-1.5 bg-success text-white rounded-lg hover:opacity-90 text-sm" title="Gerar o Relatório Técnico de Vistoria em Word"><FileText size={15} /> Relatório</button>
             <button onClick={() => { setFormData({ ...selectedProtocolo }); setIsFormOpen(true) }} className="flex items-center gap-1 px-3 py-1.5 bg-primary-btn text-white rounded-lg hover:opacity-90 text-sm"><Edit2 size={15} /> Editar</button>
             <button onClick={() => onDeleteProtocolo(selectedProtocolo.id!)} className="flex items-center gap-1 px-3 py-1.5 bg-error-expired text-white rounded-lg hover:opacity-90 text-sm"><Trash2 size={16} /> Excluir</button>
           </div>
