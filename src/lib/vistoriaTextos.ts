@@ -26,6 +26,8 @@ export const ORGAOS: Orgao[] = [
     finalidade: 'para conhecimento e adoção das providências de sua competência' },
   { sigla: 'DEFENSORIA', nome: 'Defensoria Pública do Estado do Amazonas',
     finalidade: 'para conhecimento e adoção das providências de sua competência' },
+  { sigla: 'PGM', nome: 'Procuradoria-Geral do Município – PGM',
+    finalidade: 'para conhecimento e adoção das providências de sua competência' },
 ]
 
 export interface OrgaoEscolhido { sigla: string; nome?: string }
@@ -44,7 +46,9 @@ export function nomeCurto(o: OrgaoEscolhido): string {
   return m ? m[1] : n
 }
 
-const artigo = (nome: string) => /^(Secretaria|Defensoria|Amazonas Energia)/i.test(nome) ? 'à' : 'ao'
+// "à Secretaria", "à Procuradoria", "ao Gabinete", "ao Corpo de Bombeiros"... (vale também para órgão digitado em "Outro")
+const FEMININOS = /^(Secretaria|Defensoria|Procuradoria|Promotoria|Prefeitura|Câmara|Camara|Polícia|Policia|Guarda|Coordenadoria|Superintendência|Superintendencia|Diretoria|Gerência|Gerencia|Agência|Agencia|Companhia|Fundação|Fundacao|Delegacia|Receita|Justiça|Justica|Vara|Comarca|Defesa Civil|Amazonas Energia|Assembleia|Ouvidoria|Controladoria|Unidade|Escola|Universidade)\b/i
+export const artigo = (nome: string) => FEMININOS.test(nome.trim()) ? 'à' : 'ao'
 
 export function listaNatural(itens: string[]): string {
   if (itens.length <= 1) return itens[0] || ''
@@ -58,13 +62,26 @@ export interface DadosVistoria {
   municipio: string
 }
 
+// "Rua: José Luciano Alves" -> "Rua José Luciano Alves"
+export const limparEndereco = (e: string) =>
+  e.trim().replace(/^(Rua|R\.|Avenida|Av\.?|Travessa|Tv\.?|Beco|Estrada|Ramal|Rodovia|Alameda|Comunidade|Lago)\s*:\s*/i, '$1 ')
+
 const local = (d: DadosVistoria) =>
-  [d.endereco.trim(), d.bairro.trim() && `bairro ${d.bairro.trim()}`, d.municipio.trim()].filter(Boolean).join(', ')
+  [limparEndereco(d.endereco), d.bairro.trim() && `bairro ${d.bairro.trim()}`, d.municipio.trim()].filter(Boolean).join(', ')
+
+// Ocorrência no meio da frase: "MURO CAIU" -> "muro caiu"; "Ponte Vila Nova" fica como está (só a 1ª letra cai)
+function ocorrenciaNaFrase(oc: string): string {
+  const t = oc.trim()
+  if (!t) return ''
+  const letras = t.replace(/[^A-Za-zÀ-ú]/g, '')
+  if (letras && letras === letras.toUpperCase()) return t.toLowerCase().replace(/\bn[º°o]\b/g, 'nº')
+  return /^[A-ZÀ-Ú][a-zà-ú]/.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t
+}
 
 export function textoObjeto(d: DadosVistoria): string {
-  const oc = d.ocorrencia.trim().toLowerCase()
+  const oc = ocorrenciaNaFrase(d.ocorrencia)
   return `O presente Relatório Técnico de Vistoria tem por finalidade registrar e avaliar a ocorrência de ${oc || '[descreva a ocorrência]'}, ` +
-    `no imóvel localizado em ${local(d) || '[endereço]'}, bem como subsidiar os encaminhamentos necessários.`
+    `no local situado em ${local(d) || '[endereço]'}, bem como subsidiar os encaminhamentos necessários.`
 }
 
 // Cada órgão vira um item numerado; as outras medidas (uma por linha) entram depois.
@@ -94,16 +111,16 @@ export function paragrafoEncaminhamento(orgaos: OrgaoEscolhido[]): string {
 }
 
 export function textoConclusao(d: DadosVistoria, orgaos: OrgaoEscolhido[]): string {
-  const oc = d.ocorrencia.trim().toLowerCase()
-  const p1 = `A vistoria registrou a ocorrência de ${oc || '[ocorrência]'} no imóvel localizado em ${local(d) || '[endereço]'}, conforme descrito neste relatório.`
+  const oc = ocorrenciaNaFrase(d.ocorrencia)
+  const p1 = `A vistoria registrou a ocorrência de ${oc || '[ocorrência]'} no local situado em ${local(d) || '[endereço]'}, conforme descrito neste relatório.`
   return `${p1}\n\n${paragrafoEncaminhamento(orgaos)}`
 }
 
 // Órgãos marcados que a Conclusão não cita (pela sigla ou pelo nome curto)
 export function orgaosForaDaConclusao(conclusao: string, orgaos: OrgaoEscolhido[]): string[] {
-  const t = conclusao.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const t = conclusao.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
   return orgaos.filter(o => nomeOrgao(o)).map(o => nomeCurto(o))
-    .filter(n => !t.includes(n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()))
+    .filter(n => !t.includes(n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()))
 }
 
 // "120/2026" ou "120" -> "120/2026"

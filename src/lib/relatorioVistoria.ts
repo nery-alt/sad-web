@@ -25,6 +25,26 @@ const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julh
 const fim = (xml: string, i: number) => xml.indexOf('</w:p>', i) + '</w:p>'.length
 const inicioP = (xml: string, i: number) => xml.lastIndexOf('<w:p>', i)
 
+// Linhas do quadro do topo (PROTOCOLO / SOLICITANTE / OCORRÊNCIA) correm ao lado do quadro do VISTO:
+// passando de ~50 caracteres, o texto entra por baixo dele. Quebra em linhas, preferindo " / " e " – ".
+const LARGURA_TOPO = 50
+export function quebrarTopo(rotulo: string, valor: string): string[] {
+  const linhas: string[] = []
+  let resto = valor.trim().replace(/\s+/g, ' ')
+  let cabe = LARGURA_TOPO - rotulo.length
+  while (resto.length > cabe) {
+    const trecho = resto.slice(0, cabe + 1)
+    const sep = Math.max(trecho.lastIndexOf(' / '), trecho.lastIndexOf(' – '), trecho.lastIndexOf(' - '))
+    let corte = sep > cabe * 0.4 ? sep : trecho.lastIndexOf(' ')
+    if (corte <= 0) corte = cabe
+    linhas.push(resto.slice(0, corte).trim())
+    resto = resto.slice(corte).trim().replace(/^[/–-]\s*/, '')
+    cabe = LARGURA_TOPO
+  }
+  linhas.push(resto)
+  return linhas
+}
+
 // Numa página do anexo (uma tabela de 2x2 quadros), deixa só as `n` primeiras fotos
 function ajustarPagina(trecho: string, n: number): string {
   const ini = trecho.indexOf('<w:tbl>'), fimT = trecho.lastIndexOf('</w:tbl>') + '</w:tbl>'.length
@@ -50,10 +70,12 @@ export async function gerarRelatorioVistoria(d: DadosRelatorio): Promise<Blob> {
 
   const fotos = d.fotos.slice(0, 8)
   const [ano, mes, dia] = d.dataEmissao.split('-')
+  // solicitante e ocorrência podem ocupar mais de uma linha no quadro do topo
+  const emLinhas = (rotulo: string, v: string) =>
+    quebrarTopo(rotulo, v).map(esc).join('</w:t><w:br/><w:t xml:space="preserve">')
+  xml = xml.replace('{solicitante}', () => emLinhas('SOLICITANTE: ', d.solicitante)).replace('{ocorrencia}', () => emLinhas('OCORRÊNCIA: ', d.ocorrencia))
   const valores: Record<string, string> = {
     numero: d.numero,
-    solicitante: d.solicitante.trim(),
-    ocorrencia: d.ocorrencia.trim(),
     visto_nome: d.visto.nome,
     visto_cargo: d.visto.cargo,
     visto_decreto: d.visto.decreto,
