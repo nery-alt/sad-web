@@ -66,21 +66,23 @@ const linhasRotuladas = (linhas: [string, string | null | undefined][]) =>
   linhas.filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '')
     .map(([r, v]) => run(`${r}:`, true) + run(` ${String(v).trim()}`)).join(quebra)
 
-// Tabela de assinaturas (sem bordas). Com uma pessoa só, ela fica à direita, como nos laudos originais.
+// Tabela de assinaturas (sem bordas). Com uma pessoa só, a assinatura fica centralizada na página.
 function tabelaAssinaturas(pessoas: Servidor[]): string {
   const sem = '<w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/><w:insideH w:val="nil"/><w:insideV w:val="nil"/>'
   const pr = (texto: string, negrito: boolean, depois = 0) =>
     `<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="${depois}" w:line="276" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>` +
     `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>${negrito ? '<w:b/><w:bCs/>' : ''}<w:i/><w:iCs/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>` +
     `<w:t xml:space="preserve">${esc(texto)}</w:t></w:r></w:p>`
-  const celula = (s: Servidor | null) =>
+  const celula = (s: Servidor) =>
     `<w:tc><w:tcPr><w:tcW w:w="4252" w:type="dxa"/></w:tcPr>` +
-    (s ? pr('______________________________', false) + pr(s.nome, true, 60) + pr(s.cargoAssinatura1, false, 60) + pr(s.cargoAssinatura2, false)
-       : '<w:p/>') + '</w:tc>'
-  const [esq, dir] = pessoas.length > 1 ? [pessoas[1], pessoas[0]] : [null, pessoas[0]]
-  return `<w:tbl><w:tblPr><w:tblW w:w="8504" w:type="dxa"/><w:jc w:val="center"/><w:tblBorders>${sem}</w:tblBorders>` +
-    `<w:tblLayout w:type="fixed"/><w:tblLook w:val="0000"/></w:tblPr><w:tblGrid><w:gridCol w:w="4252"/><w:gridCol w:w="4252"/></w:tblGrid>` +
-    `<w:tr><w:trPr><w:cantSplit/></w:trPr>${celula(esq)}${celula(dir)}</w:tr></w:tbl>`
+    pr('______________________________', false) + pr(s.nome, true, 60) + pr(s.cargoAssinatura1, false, 60) + pr(s.cargoAssinatura2, false) +
+    '</w:tc>'
+  const abre = (largura: number, colunas: number) =>
+    `<w:tbl><w:tblPr><w:tblW w:w="${largura}" w:type="dxa"/><w:jc w:val="center"/><w:tblBorders>${sem}</w:tblBorders>` +
+    `<w:tblLayout w:type="fixed"/><w:tblLook w:val="0000"/></w:tblPr><w:tblGrid>${'<w:gridCol w:w="4252"/>'.repeat(colunas)}</w:tblGrid>` +
+    `<w:tr><w:trPr><w:cantSplit/></w:trPr>`
+  if (pessoas.length > 1) return abre(8504, 2) + celula(pessoas[1]) + celula(pessoas[0]) + '</w:tr></w:tbl>'
+  return abre(4252, 1) + celula(pessoas[0]) + '</w:tr></w:tbl>'
 }
 
 export async function gerarLaudoAlvara(d: DadosLaudo): Promise<Blob> {
@@ -155,9 +157,13 @@ export async function gerarLaudoAlvara(d: DadosLaudo): Promise<Blob> {
       }
     }
     // legendas alinhadas à esquerda (no modelo algumas estavam justificadas e ficavam "esticadas")
+    // e fotos sem o corte herdado do modelo: a foto já vem recortada na proporção do quadro,
+    // e um corte a mais no Word deixava a imagem esticada para cima.
     {
       const ini = xml.indexOf('{{ANEXO_INI}}'), fimA = xml.indexOf('{{ANEXO_FIM}}')
-      xml = xml.slice(0, ini) + xml.slice(ini, fimA).replace(/<w:jc w:val="(both|distribute)"\/>/g, '<w:jc w:val="left"/>') + xml.slice(fimA)
+      xml = xml.slice(0, ini) + xml.slice(ini, fimA)
+        .replace(/<w:jc w:val="(both|distribute)"\/>/g, '<w:jc w:val="left"/>')
+        .replace(/<a:srcRect [^>]*\/>/g, '<a:srcRect/>') + xml.slice(fimA)
     }
     xml = trocarParagrafo(xml, '{{ANEXO_INI}}', [`<w:r><w:br w:type="page"/></w:r>`])
     xml = trocarParagrafo(xml, '{{ANEXO_FIM}}', [''])
