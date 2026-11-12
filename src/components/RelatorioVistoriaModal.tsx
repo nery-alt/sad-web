@@ -7,7 +7,7 @@ import { VISTOS, recortarFoto, reduzirFoto } from '../lib/laudoAlvara'
 import { gerarRelatorioVistoria, nomeArquivoRelatorio } from '../lib/relatorioVistoria'
 import {
   ORGAOS, type OrgaoEscolhido, nomeOrgao, textoObjeto, textoRecomendacoes, textoConclusao,
-  numeroRelatorio, paragrafos, type DadosVistoria,
+  numeroRelatorio, paragrafos, type DadosVistoria, paragrafoEncaminhamento, orgaosForaDaConclusao,
 } from '../lib/vistoriaTextos'
 import type { Protocolo } from '../types'
 
@@ -174,7 +174,7 @@ export const RelatorioVistoriaModal: React.FC<{ protocolo: Protocolo; onClose: (
   const melhorar = async (campo: Campo) => {
     const c = campos[campo]
     // a situação pode nascer só das anotações; os outros campos precisam de texto-base
-    const base = campo === 'situacao' && !c.valor.trim() ? `Ocorrência: ${ocorrencia}. Pessoas afetadas: ${afetadas || 'não informado'}.` : c.valor
+    const base = campo === 'situacao' && !c.valor.trim() ? [`Ocorrência: ${ocorrencia}.`, afetadas && `Pessoas afetadas: ${afetadas}.`].filter(Boolean).join(' ') : c.valor
     if (!base.trim()) { alert('Não há texto para a IA trabalhar.'); return }
     setIaOcupada(campo)
     try {
@@ -295,6 +295,18 @@ export const RelatorioVistoriaModal: React.FC<{ protocolo: Protocolo; onClose: (
 
   const gerar = async () => {
     if (faltando.length) { alert('Falta preencher: ' + faltando.join('; ') + '.'); return }
+    // a Conclusão tem que encaminhar para os mesmos órgãos das Recomendações
+    const fora = orgaosForaDaConclusao(conclusao, orgaos)
+    if (fora.length) {
+      if (window.confirm(`A Conclusão não cita: ${fora.join(', ')}, que está nas Recomendações.\n\n` +
+        'OK = trocar o último parágrafo da Conclusão pelo encaminhamento certo (confira e clique em Baixar Word de novo).\n' +
+        'Cancelar = gerar assim mesmo.')) {
+        const ps = paragrafos(conclusao)
+        const ultimoEhEncaminhamento = ps.length > 1 && /encaminh/i.test(ps[ps.length - 1])
+        setConclusao([...(ultimoEhEncaminhamento ? ps.slice(0, -1) : ps), paragrafoEncaminhamento(orgaos)].join('\n\n'))
+        return
+      }
+    }
     if (!window.confirm(`Gerar o Relatório ${numero} com ${fotos.length} foto(s)?`)) return
     setGerando(true)
     try {

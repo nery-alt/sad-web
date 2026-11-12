@@ -85,14 +85,25 @@ export function textoRecomendacoes(orgaos: OrgaoEscolhido[], outrasMedidas: stri
   return itensRecomendacao(orgaos, outrasMedidas).map((t, i) => `${i + 1}. ${t}`).join('\n')
 }
 
-export function textoConclusao(d: DadosVistoria, orgaos: OrgaoEscolhido[]): string {
-  const oc = d.ocorrencia.trim().toLowerCase()
+// Último parágrafo da Conclusão: para quem o relatório é encaminhado
+export function paragrafoEncaminhamento(orgaos: OrgaoEscolhido[]): string {
   const destinos = orgaos.filter(o => nomeOrgao(o)).map(o => `${artigo(nomeOrgao(o))} ${nomeCurto(o)}`)
-  const p1 = `A vistoria registrou a ocorrência de ${oc || '[ocorrência]'} no imóvel localizado em ${local(d) || '[endereço]'}, conforme descrito neste relatório.`
-  const p2 = destinos.length
+  return destinos.length
     ? `Dessa forma, recomenda-se o encaminhamento do presente relatório ${listaNatural(destinos)}, para conhecimento, avaliação e providências de ${destinos.length > 1 ? 'suas respectivas competências' : 'sua competência'}.`
     : 'Dessa forma, o presente relatório é emitido para fins de registro e adoção das providências cabíveis.'
-  return `${p1}\n\n${p2}`
+}
+
+export function textoConclusao(d: DadosVistoria, orgaos: OrgaoEscolhido[]): string {
+  const oc = d.ocorrencia.trim().toLowerCase()
+  const p1 = `A vistoria registrou a ocorrência de ${oc || '[ocorrência]'} no imóvel localizado em ${local(d) || '[endereço]'}, conforme descrito neste relatório.`
+  return `${p1}\n\n${paragrafoEncaminhamento(orgaos)}`
+}
+
+// Órgãos marcados que a Conclusão não cita (pela sigla ou pelo nome curto)
+export function orgaosForaDaConclusao(conclusao: string, orgaos: OrgaoEscolhido[]): string[] {
+  const t = conclusao.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  return orgaos.filter(o => nomeOrgao(o)).map(o => nomeCurto(o))
+    .filter(n => !t.includes(n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()))
 }
 
 // "120/2026" ou "120" -> "120/2026"
