@@ -7,7 +7,7 @@ import { VISTOS, recortarFoto, reduzirFoto } from '../lib/laudoAlvara'
 import { gerarRelatorioVistoria, nomeArquivoRelatorio } from '../lib/relatorioVistoria'
 import {
   ORGAOS, type OrgaoEscolhido, nomeOrgao, textoObjeto, textoRecomendacoes, textoConclusao,
-  numeroRelatorio, paragrafos, type DadosVistoria, paragrafoEncaminhamento, orgaosForaDaConclusao,
+  numeroRelatorio, paragrafos, type DadosVistoria, paragrafoEncaminhamento, orgaosForaDaConclusao, fraseDoTipo,
 } from '../lib/vistoriaTextos'
 import type { Protocolo } from '../types'
 
@@ -24,7 +24,15 @@ interface Ocorrencia {
   municipio_uf: string | null; latitude: number | null; longitude: number | null
   pessoas_afetadas: number | null; familias_afetadas: number | null
   descricao_situacao: string | null; recomendacoes: string | null; orgao_destino: string | null
+  // vindos do app a partir da Fase 1 (12/11/2026)
+  nivel_risco?: string | null; risco_iminente?: boolean | null; relatado?: string | null
+  origem_tipo?: string | null; orgao_demandante?: string | null; documento_origem?: string | null; escopo_pedido?: string | null
+  medidas?: string[] | null; desabrigados?: number | null; desalojados?: number | null; situacao_imovel?: string | null
 }
+
+// Risco informado no app, do jeito que a IA e a tela mostram
+const textoRisco = (o: Ocorrencia | null) => !o?.nivel_risco && !o?.risco_iminente ? ''
+  : [o?.nivel_risco && `Nível de risco: ${o.nivel_risco}`, o?.risco_iminente && 'RISCO IMINENTE (pode ocorrer a qualquer momento)'].filter(Boolean).join(' — ')
 
 interface PessoaRel {
   nome: string | null; cpf: string | null; rg: string | null; telefone: string | null; endereco: string | null
@@ -91,8 +99,10 @@ export const RelatorioVistoriaModal: React.FC<{ protocolo: Protocolo; onClose: (
   const [desfazer, setDesfazer] = useState<Record<string, string>>({})
   const [gerando, setGerando] = useState(false)
   const [ultimaVia, setUltimaVia] = useState<string | null>(null)
+  const [origem, setOrigem] = useState<{ documento?: string; orgao?: string }>({})
+  const [risco, setRisco] = useState('')
 
-  const dados = (): DadosVistoria => ({ ocorrencia, endereco, bairro, municipio })
+  const dados = (): DadosVistoria => ({ ocorrencia, endereco, bairro, municipio, ...origem })
 
   useEffect(() => {
     let ativo = true
@@ -109,26 +119,40 @@ export const RelatorioVistoriaModal: React.FC<{ protocolo: Protocolo; onClose: (
       setPessoa(ps); setTemOcorrencia(!!o); setFotos((fts as Foto[]) || [])
 
       const lat = o?.latitude ?? ps?.gps_lat, lng = o?.longitude ?? ps?.gps_lng
-      const tipOc = o ? (o.tipificacao && o.tipificacao !== 'Outros' ? o.tipificacao : o.tipificacao_outro) : null
-      const afet = o?.pessoas_afetadas
-        ? `${doisDig(o.pessoas_afetadas)} pessoa${o.pessoas_afetadas > 1 ? 's' : ''}` + (o.familias_afetadas ? ` – ${doisDig(o.familias_afetadas)} família${o.familias_afetadas > 1 ? 's' : ''}` : '')
-        : ''
+      const tipOc = o ? (o.tipificacao && o.tipificacao !== 'Outros' ? fraseDoTipo(o.tipificacao) : o.tipificacao_outro) : null
+      const qtd = (n: number | null | undefined, um: string, varios: string) => n ? `${doisDig(n)} ${n > 1 ? varios : um}` : ''
+      const afet = [
+        [qtd(o?.pessoas_afetadas, 'pessoa', 'pessoas'), qtd(o?.familias_afetadas, 'família', 'famílias')].filter(Boolean).join(' – '),
+        qtd(o?.desabrigados, 'desabrigado', 'desabrigados'), qtd(o?.desalojados, 'desalojado', 'desalojados'),
+      ].filter(Boolean).join('; ')
+      const orig = o?.origem_tipo === 'orgao' ? { documento: o.documento_origem || undefined, orgao: o.orgao_demandante || undefined } : {}
+      setOrigem(orig); setRisco(textoRisco(o))
       const d: DadosVistoria = {
         ocorrencia: r?.ocorrencia || tipOc || p.assunto || '',
         endereco: r?.endereco || o?.endereco || ps?.endereco || '',
         bairro: r?.bairro || capitalizar(o?.bairro || ps?.bairro || ''),
         municipio: o?.municipio_uf || 'Tefé/AM',
+        ...orig,
       }
+      // medidas marcadas no app + outras medidas digitadas -> "Outras medidas" (uma por linha)
+      const medidasApp = [...(o?.medidas || []), ...String(o?.recomendacoes || '').split('\n')].map(x => x.trim()).filter(Boolean).join('\n')
       const org = r?.orgaos?.length ? r.orgaos : orgaosDoApp(o?.orgao_destino ?? null)
       setOcorrencia(d.ocorrencia); setEndereco(d.endereco); setBairro(d.bairro); setMunicipio(d.municipio)
       setAfetadas(r?.pessoas_afetadas || afet)
       setCoordenadas(r?.coordenadas || (lat != null && lng != null ? `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}` : ''))
-      setAnotacoes(r?.anotacoes || [o?.descricao_situacao, o?.recomendacoes && `Recomendações de campo: ${o.recomendacoes}`].filter(Boolean).join('\n'))
+      setAnotacoes(r?.anotacoes || [
+        o?.escopo_pedido && `Pedido do órgão (o relatório deve responder): ${o.escopo_pedido}`,
+        o?.descricao_situacao && `Constatado na vistoria: ${o.descricao_situacao}`,
+        o?.relatado && `Relatado por moradores (não constatado; escrever como "segundo relatos"): ${o.relatado}`,
+        textoRisco(o),
+        o?.situacao_imovel && `Situação do imóvel: ${o.situacao_imovel}`,
+        !o?.medidas?.length && o?.recomendacoes && `Recomendações de campo: ${o.recomendacoes}`,
+      ].filter(Boolean).join('\n'))
       setObjeto(r?.objeto || textoObjeto(d))
       setSituacao(r?.situacao || '')
       setOrgaos(org)
-      setOutrasMedidas(r?.outras_medidas || '')
-      setRecomendacoes(r?.recomendacoes || textoRecomendacoes(org, ''))
+      setOutrasMedidas(r?.outras_medidas || (o?.medidas?.length ? medidasApp : ''))
+      setRecomendacoes(r?.recomendacoes || textoRecomendacoes(org, r?.outras_medidas || (o?.medidas?.length ? medidasApp : '')))
       setConclusao(r?.conclusao || textoConclusao(d, org))
       setCarregando(false)
     })()
@@ -169,6 +193,8 @@ export const RelatorioVistoriaModal: React.FC<{ protocolo: Protocolo; onClose: (
   }
   const contexto = () => [
     `Ocorrência: ${ocorrencia}`, `Local: ${[endereco, bairro && `bairro ${bairro}`, municipio].filter(Boolean).join(', ')}`,
+    origem.documento && `Vistoria em atendimento a: ${origem.documento}${origem.orgao ? ` (${origem.orgao})` : ''}`,
+    risco && `${risco}. O texto deve deixar esse grau de risco claro, sem amenizar.`,
     afetadas && `Pessoas afetadas: ${afetadas}`, anotacoes && `Anotações: ${anotacoes}`,
   ].filter(Boolean).join('\n')
   const melhorar = async (campo: Campo) => {
@@ -400,6 +426,9 @@ export const RelatorioVistoriaModal: React.FC<{ protocolo: Protocolo; onClose: (
         <div className="overflow-y-auto p-4 space-y-4 text-sm">
           {ultimaVia && (
             <p className="text-xs text-text-secondary">Já existe um relatório gerado para este protocolo: <a href={ultimaVia} target="_blank" rel="noreferrer" className="text-primary-btn underline">abrir a última via</a>.</p>
+          )}
+          {risco && (
+            <p className="text-xs font-bold text-error-expired bg-error-expired/5 border border-error-expired/20 rounded p-2">Risco informado no aplicativo: {risco.replace('Nível de risco: ', '')}</p>
           )}
           {!temOcorrencia && (
             <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded p-2">

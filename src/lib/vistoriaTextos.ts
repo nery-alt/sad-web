@@ -60,6 +60,8 @@ export interface DadosVistoria {
   endereco: string
   bairro: string
   municipio: string
+  documento?: string   // vistoria pedida por órgão: "Ofício nº 722/2026 – PGM"
+  orgao?: string       // "Procuradoria-Geral do Município – PGM"
 }
 
 // "Rua: José Luciano Alves" -> "Rua José Luciano Alves"
@@ -80,8 +82,14 @@ function ocorrenciaNaFrase(oc: string): string {
 
 export function textoObjeto(d: DadosVistoria): string {
   const oc = ocorrenciaNaFrase(d.ocorrencia)
+  const doc = (d.documento || '').trim(), org = (d.orgao || '').trim()
+  const fem = artigo(org) === 'à'
+  const aoDoc = /^(Not[íi]cia|Notifica|Requisi|Solicita|Carta|Comunica|Den[úu]ncia|Portaria|Recomenda)/i.test(doc) ? 'à' : 'ao'
+  const atendimento = doc
+    ? `, em atendimento ${aoDoc} ${doc}${org && !doc.includes(org) ? `, encaminhad${aoDoc === 'à' ? 'a' : 'o'} ${fem ? 'pela' : 'pelo'} ${org}` : ''}`
+    : org ? `, a pedido ${fem ? 'da' : 'do'} ${org}` : ''
   return `O presente Relatório Técnico de Vistoria tem por finalidade registrar e avaliar a ocorrência de ${oc || '[descreva a ocorrência]'}, ` +
-    `no local situado em ${local(d) || '[endereço]'}, bem como subsidiar os encaminhamentos necessários.`
+    `no local situado em ${local(d) || '[endereço]'}${atendimento}, bem como subsidiar os encaminhamentos necessários.`
 }
 
 // Cada órgão vira um item numerado; as outras medidas (uma por linha) entram depois.
@@ -130,3 +138,20 @@ export function numeroRelatorio(numero: string, ano = new Date().getFullYear()):
 }
 
 export const paragrafos = (t: string) => t.split(/\n\s*\n/).map(s => s.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean)
+
+// Tipo escolhido no aplicativo -> como a ocorrência entra na frase do relatório
+const FRASE_TIPO: Record<string, string> = {
+  'Edificação (dano estrutural)': 'danos estruturais em edificação',
+  'Muro': 'danos em muro',
+  'Barranco / erosão / terras caídas': 'erosão e desbarrancamento (terras caídas)',
+  'Incêndio': 'incêndio',
+  'Chuvas intensas / alagamento': 'alagamento decorrente de chuvas intensas',
+  'Vendaval / destelhamento': 'destelhamento decorrente de vendaval',
+  'Cheia / enchente': 'cheia',
+  'Ponte / passarela': 'comprometimento de ponte/passarela',
+  'Árvore': 'árvore com risco de queda',
+  'Rede elétrica / poste': 'risco envolvendo a rede elétrica',
+  'Espaço público (escola, creche, praça)': 'riscos em espaço público',
+  'Instalação temporária (parquinho, circo, evento)': 'instalação temporária (parque de diversões, circo ou evento)',
+}
+export const fraseDoTipo = (tipo: string) => FRASE_TIPO[tipo] || tipo
