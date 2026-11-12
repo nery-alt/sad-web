@@ -110,14 +110,15 @@ const App: React.FC = () => {
       .select('*, pessoa:pessoas(nome, endereco, telefone, cpf, observacoes)')
       .order('criado_em', { ascending: false })
     if (prError) console.error('Erro ao carregar protocolos:', prError)
-    else if (pr) setProtocolos((pr as Array<Protocolo & { pessoa: Pick<Pessoa, 'nome' | 'endereco' | 'telefone' | 'cpf' | 'observacoes'> | null }>).map(r => ({
+    else if (pr) setProtocolos((pr as Array<Protocolo & { pessoa: Pick<Pessoa, 'nome' | 'endereco' | 'telefone' | 'cpf' | 'observacoes'> | null }>).map(({ pessoa, ...r }) => ({
+      // `pessoa` (do join) fica fora do objeto: não é coluna de protocolos e quebraria o update ao editar.
       ...r,
       historico: typeof r.historico === 'string' ? r.historico : JSON.stringify(r.historico ?? []),
-      pessoa_nome: r.pessoa?.nome,
-      pessoa_endereco: r.pessoa?.endereco,
-      pessoa_telefone: r.pessoa?.telefone,
-      pessoa_cpf: r.pessoa?.cpf,
-      pessoa_observacoes: r.pessoa?.observacoes,
+      pessoa_nome: pessoa?.nome,
+      pessoa_endereco: pessoa?.endereco,
+      pessoa_telefone: pessoa?.telefone,
+      pessoa_cpf: pessoa?.cpf,
+      pessoa_observacoes: pessoa?.observacoes,
     })))
 
     const { data: enc, error: encError } = await supabase
@@ -131,32 +132,32 @@ const App: React.FC = () => {
       .from('documentos_recebidos')
       .select('*, pessoa:pessoas(nome), protocolo:protocolos(numero)')
       .order('criado_em', { ascending: false })
-    if (dr) setDocumentos((dr as Array<DocumentoRecebido & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(r => ({
-      ...r, pessoa_nome: r.pessoa?.nome, protocolo_numero: r.protocolo?.numero
+    if (dr) setDocumentos((dr as Array<DocumentoRecebido & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(({ pessoa, protocolo, ...r }) => ({
+      ...r, pessoa_nome: pessoa?.nome, protocolo_numero: protocolo?.numero
     })))
 
     const { data: dg } = await supabase
       .from('documentos_gerados')
       .select('*, pessoa:pessoas(nome), protocolo:protocolos(numero)')
       .order('criado_em', { ascending: false })
-    if (dg) setDocumentosGerados((dg as Array<DocumentoGerado & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(r => ({
-      ...r, pessoa_nome: r.pessoa?.nome, protocolo_numero: r.protocolo?.numero
+    if (dg) setDocumentosGerados((dg as Array<DocumentoGerado & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(({ pessoa, protocolo, ...r }) => ({
+      ...r, pessoa_nome: pessoa?.nome, protocolo_numero: protocolo?.numero
     })))
 
     const { data: t } = await supabase
       .from('tarefas')
       .select('*, pessoa:pessoas(nome), protocolo:protocolos(numero)')
       .order('prazo')
-    if (t) setTarefas((t as Array<Tarefa & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(r => ({
-      ...r, pessoa_nome: r.pessoa?.nome, protocolo_numero: r.protocolo?.numero
+    if (t) setTarefas((t as Array<Tarefa & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(({ pessoa, protocolo, ...r }) => ({
+      ...r, pessoa_nome: pessoa?.nome, protocolo_numero: protocolo?.numero
     })))
 
     const { data: ag } = await supabase
       .from('agenda')
       .select('*, pessoa:pessoas(nome), protocolo:protocolos(numero)')
       .order('data').order('horario')
-    if (ag) setAgenda((ag as Array<AgendaItem & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(r => ({
-      ...r, pessoa_nome: r.pessoa?.nome, protocolo_numero: r.protocolo?.numero
+    if (ag) setAgenda((ag as Array<AgendaItem & { pessoa: Pick<Pessoa, 'nome'> | null; protocolo: Pick<Protocolo, 'numero'> | null }>).map(({ pessoa, protocolo, ...r }) => ({
+      ...r, pessoa_nome: pessoa?.nome, protocolo_numero: protocolo?.numero
     })))
   }, [])
 
