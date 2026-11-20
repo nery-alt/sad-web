@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { Plus, CheckSquare, Trash2, Search, X, Edit2, ExternalLink } from 'lucide-react'
 import type { Tarefa, Pessoa, Protocolo } from '../types'
+import { norm } from '../lib/texto'
 
 interface TarefasProps {
   tarefas: Tarefa[]
@@ -53,7 +54,7 @@ export const Tarefas: React.FC<TarefasProps> = ({
   }, [newTarefaInit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredTarefas = useMemo(() => tarefas.filter(t => {
-    const matchSearch = (t.titulo || '').toLowerCase().includes(searchTarefa.toLowerCase())
+    const matchSearch = norm(t.titulo).includes(norm(searchTarefa))
     const matchStatus = filterStatus === 'todos' || (t.status || '') === filterStatus
     const matchPrioridade = filterPrioridade === 'todos' || (t.prioridade || '') === filterPrioridade
     return matchSearch && matchStatus && matchPrioridade

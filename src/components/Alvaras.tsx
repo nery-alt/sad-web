@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { FileCheck, Plus, Search, Printer, Pencil, Trash2, Paperclip, FileText, X, FileDown, ClipboardCheck } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { norm } from '../lib/texto'
 import { SERVIDORES, gerarRequerimentoAlvara, nomeArquivoRequerimento, type Porte } from '../lib/requerimentoAlvara'
 import { LaudoModal, type AlvaraLaudo } from './LaudoModal'
 
@@ -93,13 +94,13 @@ export const Alvaras: React.FC = () => {
   useEffect(() => { carregar() }, [carregar])
 
   const filtrados = alvaras.filter(a => {
-    const b = filtro.toLowerCase()
+    const b = norm(filtro)
     const okBusca = !b ||
-      (a.nome_estabelecimento || '').toLowerCase().includes(b) ||
-      (a.nome_responsavel || '').toLowerCase().includes(b) ||
-      (a.bairro || '').toLowerCase().includes(b) ||
-      (a.numero || '').toLowerCase().includes(b) ||
-      (a.cnpj || '').includes(b)
+      norm(a.nome_estabelecimento).includes(b) ||
+      norm(a.nome_responsavel).includes(b) ||
+      norm(a.bairro).includes(b) ||
+      norm(a.numero).includes(b) ||
+      norm(a.cnpj).includes(b)
     const okSit = filtroSituacao === 'todos' || (a.situacao_imovel || '') === filtroSituacao
     return okBusca && okSit
   })

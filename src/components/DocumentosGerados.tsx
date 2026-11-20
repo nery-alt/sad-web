@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { FilePlus, ExternalLink, Trash2, Search } from 'lucide-react'
 import type { DocumentoGerado, Pessoa } from '../types'
+import { norm } from '../lib/texto'
 
 interface DocumentosGeradosProps {
   documentosGerados: DocumentoGerado[]
@@ -21,9 +22,9 @@ export const DocumentosGerados: React.FC<DocumentosGeradosProps> = ({
   const [searchDoc, setSearchDoc] = useState('')
 
   const filteredDocs = useMemo(() => documentosGerados.filter(d => 
-    d.titulo.toLowerCase().includes(searchDoc.toLowerCase()) ||
-    d.tipo.toLowerCase().includes(searchDoc.toLowerCase()) ||
-    d.pessoa_nome?.toLowerCase().includes(searchDoc.toLowerCase())
+    norm(d.titulo).includes(norm(searchDoc)) ||
+    norm(d.tipo).includes(norm(searchDoc)) ||
+    norm(d.pessoa_nome).includes(norm(searchDoc))
   ), [documentosGerados, searchDoc])
 
   return (

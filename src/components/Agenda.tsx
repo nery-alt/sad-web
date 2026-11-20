@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Plus, CheckCircle, Trash2, Search, Edit2, X, Calendar, Clock, User, FileText, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { AgendaItem, Pessoa, Protocolo } from '../types'
+import { norm } from '../lib/texto'
 
 interface AgendaProps {
   agenda: AgendaItem[]
@@ -79,8 +80,8 @@ export const Agenda: React.FC<AgendaProps> = ({
   , [agendaByDate, selectedDate])
 
   const filteredAgenda = useMemo(() => agenda.filter(a =>
-    a.titulo.toLowerCase().includes(searchAgenda.toLowerCase()) ||
-    a.pessoa_nome?.toLowerCase().includes(searchAgenda.toLowerCase())
+    norm(a.titulo).includes(norm(searchAgenda)) ||
+    norm(a.pessoa_nome).includes(norm(searchAgenda))
   ).sort((a, b) => (a.data || '').localeCompare(b.data || '') || (a.horario || '').localeCompare(b.horario || '')),
   [agenda, searchAgenda])
 

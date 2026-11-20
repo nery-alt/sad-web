@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react'
 import { ExternalLink, Trash2, Search, Upload } from 'lucide-react'
 import type { DocumentoRecebido, Pessoa } from '../types'
+import { norm } from '../lib/texto'
 
 interface DocumentosRecebidosProps {
   documentos: DocumentoRecebido[]
@@ -24,9 +25,9 @@ export const DocumentosRecebidos: React.FC<DocumentosRecebidosProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const filteredDocs = useMemo(() => documentos.filter(d =>
-    (d.nome || '').toLowerCase().includes(searchDoc.toLowerCase()) ||
-    (d.pessoa_nome || '').toLowerCase().includes(searchDoc.toLowerCase()) ||
-    (d.protocolo_numero || '').toLowerCase().includes(searchDoc.toLowerCase())
+    norm(d.nome).includes(norm(searchDoc)) ||
+    norm(d.pessoa_nome).includes(norm(searchDoc)) ||
+    norm(d.protocolo_numero).includes(norm(searchDoc))
   ), [documentos, searchDoc])
 
   const getFileIcon = (type: string) => {

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { Plus, ArrowLeft, History, Send, Trash2, Search, Edit2, Phone, MapPin, CreditCard, CheckSquare, ExternalLink, X, FileText } from 'lucide-react'
 import type { Protocolo, Pessoa, Movimentacao, Tarefa, Encaminhamento, DocumentoRecebido } from '../types'
 import { supabase } from '../lib/supabase'
+import { norm } from '../lib/texto'
 import { RelatorioVistoriaModal } from './RelatorioVistoriaModal'
 
 interface ProtocolosProps {
@@ -98,18 +99,18 @@ export const Protocolos: React.FC<ProtocolosProps> = ({
   const [encRetornoData, setEncRetornoData] = useState('')
 
   const filteredProtocolos = useMemo(() => protocolos.filter(p =>
-    p.numero.toLowerCase().includes(searchProtocolo.toLowerCase()) ||
-    p.assunto.toLowerCase().includes(searchProtocolo.toLowerCase()) ||
-    (p.pessoa_nome || '').toLowerCase().includes(searchProtocolo.toLowerCase())
+    norm(p.numero).includes(norm(searchProtocolo)) ||
+    norm(p.assunto).includes(norm(searchProtocolo)) ||
+    norm(p.pessoa_nome).includes(norm(searchProtocolo))
   ), [protocolos, searchProtocolo])
 
   // Lista de pessoas filtrada pela busca (nome ou CPF) — usada no seletor do formulário.
   const pessoasFiltradas = useMemo(() => {
-    const termo = buscaPessoa.trim().toLowerCase()
+    const termo = norm(buscaPessoa)
     if (!termo) return pessoas.slice(0, 8)
     return pessoas.filter(p =>
-      p.nome.toLowerCase().includes(termo) ||
-      (p.cpf || '').toLowerCase().includes(termo)
+      norm(p.nome).includes(termo) ||
+      norm(p.cpf).includes(termo)
     ).slice(0, 8)
   }, [pessoas, buscaPessoa])
 

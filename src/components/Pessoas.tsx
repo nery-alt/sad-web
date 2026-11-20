@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useLayoutEffect, useEffect, useRef, useCallback } from 'react'
 import { Plus, ArrowLeft, Edit, Trash2, Building2, MapPin, FileText, Inbox, FilePlus, ExternalLink, Search, CheckSquare, Upload, Loader, Printer } from 'lucide-react'
 import type { Pessoa, Protocolo, DocumentoRecebido, DocumentoGerado, Tarefa } from '../types'
+import { norm } from '../lib/texto'
 
 interface PessoasProps {
   pessoas: Pessoa[]
@@ -161,9 +162,9 @@ export const Pessoas: React.FC<PessoasProps> = ({
   }, [])
 
   const filteredPessoas = useMemo(() => pessoas.filter(p =>
-    p.nome.toLowerCase().includes(searchPessoa.toLowerCase()) ||
-    p.orgao?.toLowerCase().includes(searchPessoa.toLowerCase()) ||
-    p.bairro?.toLowerCase().includes(searchPessoa.toLowerCase())
+    norm(p.nome).includes(norm(searchPessoa)) ||
+    norm(p.orgao).includes(norm(searchPessoa)) ||
+    norm(p.bairro).includes(norm(searchPessoa))
   ), [pessoas, searchPessoa])
 
   const pessoaProtocolos = useMemo(() => !selectedPessoa ? [] : protocolos.filter(pr => pr.pessoa_id === selectedPessoa.id), [protocolos, selectedPessoa])
