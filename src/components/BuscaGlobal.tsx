@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Search, Users, FileText, Inbox, FilePlus, CheckSquare, Calendar, MapPin } from 'lucide-react'
 import type { Pessoa, Protocolo, DocumentoRecebido, DocumentoGerado, Tarefa, AgendaItem } from '../types'
+import { norm } from '../lib/texto'
 
 interface BuscaGlobalProps {
   pessoas: Pessoa[]
@@ -29,28 +30,28 @@ export const BuscaGlobal: React.FC<BuscaGlobalProps> = ({
     if (modo !== 'geral' || searchTerm.length < 3) {
       return { pessoas: [], protocolos: [], documentos: [], documentosGerados: [], tarefas: [], agenda: [] }
     }
-    const term = searchTerm.toLowerCase()
+    const term = norm(searchTerm)
     return {
       pessoas: pessoas.filter(p =>
-        p.nome.toLowerCase().includes(term) ||
-        (p.orgao || '').toLowerCase().includes(term) ||
-        (p.cpf || '').toLowerCase().includes(term)
+        norm(p.nome).includes(term) ||
+        norm(p.orgao).includes(term) ||
+        norm(p.cpf).includes(term)
       ).slice(0, 5),
       protocolos: protocolos.filter(p =>
-        p.numero.toLowerCase().includes(term) ||
-        p.assunto.toLowerCase().includes(term) ||
-        (p.pessoa_nome || '').toLowerCase().includes(term)
+        norm(p.numero).includes(term) ||
+        norm(p.assunto).includes(term) ||
+        norm(p.pessoa_nome).includes(term)
       ).slice(0, 5),
       documentos: documentos.filter(d =>
-        d.nome.toLowerCase().includes(term) ||
-        (d.pessoa_nome || '').toLowerCase().includes(term)
+        norm(d.nome).includes(term) ||
+        norm(d.pessoa_nome).includes(term)
       ).slice(0, 5),
       documentosGerados: documentosGerados.filter(d =>
-        d.titulo.toLowerCase().includes(term) ||
-        (d.pessoa_nome || '').toLowerCase().includes(term)
+        norm(d.titulo).includes(term) ||
+        norm(d.pessoa_nome).includes(term)
       ).slice(0, 5),
-      tarefas: tarefas.filter(t => t.titulo.toLowerCase().includes(term)).slice(0, 5),
-      agenda: agenda.filter(a => a.titulo.toLowerCase().includes(term)).slice(0, 5),
+      tarefas: tarefas.filter(t => norm(t.titulo).includes(term)).slice(0, 5),
+      agenda: agenda.filter(a => norm(a.titulo).includes(term)).slice(0, 5),
     }
   }, [searchTerm, modo, pessoas, protocolos, documentos, documentosGerados, tarefas, agenda])
 
@@ -59,12 +60,12 @@ export const BuscaGlobal: React.FC<BuscaGlobalProps> = ({
   // ── MODO ENDEREÇO ────────────────────────────────────────────────
   const pessoasEndereco = useMemo(() => {
     if (modo !== 'endereco' || searchTerm.length < 3) return []
-    const term = searchTerm.toLowerCase()
+    const term = norm(searchTerm)
     return pessoas.filter(p =>
-      (p.endereco || '').toLowerCase().includes(term) ||
-      (p.bairro || '').toLowerCase().includes(term) ||
-      (p.ponto_referencia || '').toLowerCase().includes(term) ||
-      (p.municipio || '').toLowerCase().includes(term)
+      norm(p.endereco).includes(term) ||
+      norm(p.bairro).includes(term) ||
+      norm(p.ponto_referencia).includes(term) ||
+      norm(p.municipio).includes(term)
     )
   }, [searchTerm, modo, pessoas])
 

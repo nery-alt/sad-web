@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Home, Plus, Search, Pencil, Trash2, Paperclip, FileText, X, Upload } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { norm } from '../lib/texto'
 import { ImportarComunidades } from './ImportarComunidades'
 
 interface Comunidade {
@@ -70,13 +71,13 @@ export const Comunidades: React.FC = () => {
   const calhas = Array.from(new Set(lista.map(c => c.calha).filter((x): x is string => !!x))).sort((a, b) => a.localeCompare(b, 'pt-BR'))
 
   const filtrados = lista.filter(c => {
-    const b = filtro.toLowerCase()
+    const b = norm(filtro)
     if (filtroCalha && (c.calha || '') !== filtroCalha) return false
     if (soIsoladas && !c.isolada_estiagem) return false
     return !b ||
-      (c.nome || '').toLowerCase().includes(b) ||
-      (c.presidente_nome || '').toLowerCase().includes(b) ||
-      (c.calha || '').toLowerCase().includes(b)
+      norm(c.nome).includes(b) ||
+      norm(c.presidente_nome).includes(b) ||
+      norm(c.calha).includes(b)
   })
   const totalFamilias = filtrados.reduce((s, c) => s + (c.qtd_familias || 0), 0)
   const totalIsoladas = filtrados.filter(c => c.isolada_estiagem).length
