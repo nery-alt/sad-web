@@ -377,21 +377,10 @@ const App: React.FC = () => {
     if (filePath.startsWith('http')) window.open(filePath, '_blank')
   }
 
-  const handleDeleteDocumento = async (id: number, caminho?: string) => {
+  const handleDeleteDocumento = async (id: number) => {
     if (bloqueadoSomenteLeitura()) return
     if (!window.confirm('Remover o registro deste documento?')) return
-    if (caminho?.startsWith('http')) {
-      try {
-        const url = new URL(caminho)
-        const pathParts = url.pathname.split(`/${BUCKET}/`)
-        if (pathParts.length > 1) {
-          const storagePath = decodeURIComponent(pathParts[1].split('?')[0])
-          await supabase.storage.from(BUCKET).remove([storagePath])
-        }
-      } catch {
-        // best-effort: mesmo se falhar ao remover do storage, segue removendo o registro
-      }
-    }
+    // O arquivo continua guardado no armazenamento: só sai quando o Administrador Geral apagar em definitivo.
     const { error } = await supabase.from('documentos_recebidos').delete().eq('id', id)
     if (falhou(error, 'remover o documento')) return
     fetchData()
@@ -456,7 +445,7 @@ const App: React.FC = () => {
       setSelectedProtocolo(prev => prev ? { ...prev, historico: JSON.stringify(historico) } : null)
   }
 
-  // ── Encaminhamentos ──────────────────────────────────────────────
+  // ── Encaminhamentos ────────────────────────────────────────────────
   const handleSaveEncaminhamento = async (enc: Encaminhamento) => {
     if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()

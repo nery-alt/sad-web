@@ -4,6 +4,9 @@ import { Shield, Mail, Lock, User, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 
 type Mode = 'login' | 'cadastro' | 'esqueci'
 
+// Final do e-mail das contas criadas pelo administrador (só para entrar; nenhuma mensagem é enviada)
+const DOMINIO_INTERNO = '@sad.example'
+
 export const Login: React.FC = () => {
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
@@ -18,8 +21,11 @@ export const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true); resetMsg()
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
-    if (error) setMsg({ tipo: 'erro', texto: 'Email ou senha incorretos.' })
+    // Quem não digita @ entra só com o nome (ex.: barbara.macario); o final do e-mail interno é completado aqui.
+    const usuario = email.trim().toLowerCase()
+    const emailFinal = usuario.includes('@') ? usuario : `${usuario}${DOMINIO_INTERNO}`
+    const { error } = await supabase.auth.signInWithPassword({ email: emailFinal, password: senha })
+    if (error) setMsg({ tipo: 'erro', texto: 'Usuário ou senha incorretos.' })
     setLoading(false)
   }
 
@@ -42,6 +48,11 @@ export const Login: React.FC = () => {
   const handleEsqueci = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true); resetMsg()
+    if (!email.includes('@') || email.trim().toLowerCase().endsWith(DOMINIO_INTERNO)) {
+      setMsg({ tipo: 'erro', texto: 'Para redefinir a senha, peça ao administrador.' })
+      setLoading(false)
+      return
+    }
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin,
     })
@@ -80,7 +91,7 @@ export const Login: React.FC = () => {
               {mode === 'esqueci' && 'Recuperar senha'}
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              {mode === 'login' && 'Acesse com seu email e senha'}
+              {mode === 'login' && 'Acesse com seu usuário e senha'}
               {mode === 'cadastro' && 'Preencha os dados para criar sua conta'}
               {mode === 'esqueci' && 'Informe seu email para receber o link de redefinição'}
             </p>
@@ -98,11 +109,11 @@ export const Login: React.FC = () => {
             {mode === 'login' && (
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Email</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Usuário</label>
                   <div className="relative">
                     <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
-                      required type="email" placeholder="seu@email.com"
+                      required type="text" autoCapitalize="none" autoCorrect="off" placeholder="nome.sobrenome"
                       className="w-full pl-9 pr-4 py-3 border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-400 transition-all"
                       value={email} onChange={e => setEmail(e.target.value)}
                     />
@@ -208,22 +219,11 @@ export const Login: React.FC = () => {
               </form>
             )}
 
-            {/* Rodapé do card */}
-            {mode === 'login' && (
-              <div className="mt-6 pt-4 border-t border-gray-100 text-center">
-                <p className="text-sm text-slate-500">
-                  Não tem conta?{' '}
-                  <button onClick={() => { setMode('cadastro'); resetMsg() }} className="text-orange-500 font-bold hover:text-orange-600 transition-colors">
-                    Cadastrar
-                  </button>
-                </p>
-              </div>
-            )}
           </div>
         </div>
 
         <p className="text-center text-slate-600 text-xs mt-6">
-          SEMDECP — Secretaria Municipal de Defesa Civil e Patrimonial
+          SEMDCEP — Secretaria Municipal de Defesa Civil e Patrimonial
         </p>
       </div>
     </div>
