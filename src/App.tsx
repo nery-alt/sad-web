@@ -19,6 +19,7 @@ import { Alvaras } from './components/Alvaras'
 import { Comunidades } from './components/Comunidades'
 import { GraficoFocos } from './components/GraficoFocos'
 import { NivelDosRios } from './components/nivel-dos-rios'
+import { Atendimentos } from './components/Atendimentos'
 import type {
   Pessoa,
   Protocolo,
@@ -39,6 +40,8 @@ const App: React.FC = () => {
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [isReadOnly, setIsReadOnly] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  // Setores do usuário logado (null = ainda carregando). Define quais abas aparecem no menu.
+  const [setoresUsuario, setSetoresUsuario] = useState<string[] | null>(null)
 
   const [activeTab, setActiveTab] = useState('Dashboard')
   const [isOnline, setIsOnline] = useState(navigator.onLine)
@@ -99,6 +102,30 @@ const App: React.FC = () => {
         }
       })
   }, [session])
+
+  // Descobre em que setor o usuário trabalha (tabela membros_setor)
+  useEffect(() => {
+    if (!session) { setSetoresUsuario(null); return }
+    const email = (session.user.email || '').toLowerCase()
+    supabase.from('membros_setor').select('setores(nome)').eq('email', email)
+      .then(({ data, error }) => {
+        if (error || !data) { setSetoresUsuario([]); return }
+        const nomes = (data as unknown as Array<{ setores: { nome: string } | null }>)
+          .map(r => r.setores?.nome).filter((n): n is string => !!n)
+        setSetoresUsuario(nomes)
+      })
+  }, [session])
+
+  // Quem trabalha só na Assistência Social entra direto em Atendimentos.
+  const SO_ASSISTENCIA = (setoresUsuario || []).length > 0 && (setoresUsuario || []).every(s => s === 'Assistência Social') && !isAdmin && !isReadOnly
+  useEffect(() => {
+    if (SO_ASSISTENCIA) setActiveTab(t => (t === 'Dashboard' ? 'Atendimentos' : t))
+  }, [SO_ASSISTENCIA])
+
+  // Menu por setor: Administrador Geral e leitura veem tudo; a Assistência vê só o que usa;
+  // os demais não veem Atendimentos (a não ser que também trabalhem na Assistência).
+  const abasSomente = SO_ASSISTENCIA ? ['Dashboard', 'Atendimentos', 'Agenda', 'Tarefas', 'Configurações'] : undefined
+  const abasOcultas = (isAdmin || isReadOnly || (setoresUsuario || []).includes('Assistência Social')) ? undefined : ['Atendimentos']
 
   const fetchData = useCallback(async () => {
     const { data: p, error: pError } = await supabase.from('pessoas').select('*').order('nome')
@@ -445,7 +472,7 @@ const App: React.FC = () => {
       setSelectedProtocolo(prev => prev ? { ...prev, historico: JSON.stringify(historico) } : null)
   }
 
-  // ── Encaminhamentos ────────────────────────────────────────────────
+  // ── Encaminhamentos ──────────────────────────────────────────────────
   const handleSaveEncaminhamento = async (enc: Encaminhamento) => {
     if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
@@ -590,7 +617,8 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden font-sans">
-      <Sidebar activeTab={activeTab} onTabChange={handleNavigate} onLogout={handleLogout} isAdmin={isAdmin} />
+      <Sidebar activeTab={activeTab} onTabChange={handleNavigate} onLogout={handleLogout} isAdmin={isAdmin}
+        somente={abasSomente} ocultar={abasOcultas} />
       <main className="flex-1 flex flex-col bg-main-bg overflow-hidden">
         {isReadOnly && (
           <div className="bg-deadline-alert/10 text-deadline-alert text-xs font-bold text-center py-1 shrink-0">
@@ -620,6 +648,7 @@ const App: React.FC = () => {
           {activeTab === 'Comunidades' && <Comunidades />}
           {activeTab === 'Focos de Calor' && <GraficoFocos />}
           {activeTab === 'Nível dos Rios' && <NivelDosRios />}
+          {activeTab === 'Atendimentos' && <Atendimentos somenteLeitura={isReadOnly} />}
           {activeTab === 'Pessoas / Dossiês' && (
             <Pessoas
               pessoas={pessoas} protocolos={protocolos} documentos={documentos}
