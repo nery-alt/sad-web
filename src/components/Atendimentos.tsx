@@ -548,7 +548,8 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
               <button onClick={() => setAberto(false)} className="text-text-secondary hover:text-text-main"><X size={18} /></button>
             </div>
 
-            <fieldset disabled={somenteLeitura || salvando} className="p-5 overflow-y-auto space-y-4 min-w-0">
+            <div className="p-5 overflow-y-auto min-h-0 flex-1">
+            <fieldset disabled={somenteLeitura || salvando} className="space-y-4 min-w-0">
               <datalist id="dl-eventos">{EVENTOS.map(e => <option key={e} value={e} />)}</datalist>
               <datalist id="dl-cobrade">{COBRADES.map(c => <option key={c.codigo} value={c.codigo} label={`${c.nome} (${c.grupo})`} />)}</datalist>
               <datalist id="dl-itens">{itensSugeridos.map(i => <option key={i} value={i} />)}</datalist>
@@ -793,6 +794,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                 </div>
               </Secao>
             </fieldset>
+            </div>
 
             <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-surface-card shrink-0">
               <button onClick={() => setAberto(false)} className="px-4 py-2 text-text-secondary font-bold hover:text-text-main text-sm">{somenteLeitura ? 'Fechar' : 'Cancelar'}</button>
