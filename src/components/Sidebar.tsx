@@ -17,6 +17,7 @@ import {
   Home,
   Flame,
   Waves,
+  HeartHandshake,
 } from 'lucide-react'
 
 interface MenuItem {
@@ -29,11 +30,16 @@ interface SidebarProps {
   onTabChange: (tab: string) => void
   onLogout: () => void
   isAdmin?: boolean
+  /** Se informado, só estas abas aparecem (menu de um setor). */
+  somente?: string[]
+  /** Abas que não aparecem para este usuário. */
+  ocultar?: string[]
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, onLogout, isAdmin }) => {
-  const menuItems: MenuItem[] = [
+export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, onLogout, isAdmin, somente, ocultar }) => {
+  const todos: MenuItem[] = [
     { name: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+    { name: 'Atendimentos', icon: <HeartHandshake size={20} /> },
     { name: 'Mapa de Ocorrências', icon: <MapPin size={20} /> },
     { name: 'Situação de Emergência', icon: <AlertTriangle size={20} /> },
     { name: 'Alvarás', icon: <FileCheck size={20} /> },
@@ -50,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, onLogo
     ...(isAdmin ? [{ name: 'Usuários', icon: <UserCog size={20} /> }] : []),
     { name: 'Configurações', icon: <Settings size={20} /> },
   ]
+  const menuItems = todos.filter(i => (!somente || somente.includes(i.name)) && !(ocultar || []).includes(i.name))
 
   return (
     <aside className="w-64 bg-sidebar-bg text-white flex flex-col shrink-0">
