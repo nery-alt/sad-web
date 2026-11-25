@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { HeartHandshake, Plus, Search, Printer, Pencil, Trash2, X, Save } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { norm } from '../lib/texto'
+import { COBRADES, nomeCobrade } from '../lib/cobrade'
 
 type Situacao = 'em_atendimento' | 'acompanhamento' | 'encerrado'
 
@@ -35,6 +36,26 @@ interface Atendimento {
   acomp_psicossocial: boolean | null
   nasf: boolean | null
   observacoes: string | null
+  hora_ocorrencia: string | null
+  tipificacao: string[]
+  tipificacao_outros: string | null
+  area_afetada: string | null
+  tipo_imovel: string | null
+  tipo_residencia: string | null
+  tipo_residencia_outros: string | null
+  propriedade: string | null
+  necessidades_basicas: string[]
+  abrigo: string[]
+  pessoas_afetadas: number | null
+  familias_afetadas: number | null
+  danos_materiais: string | null
+  renda_familiar: number | null
+  resp_nascimento: string | null
+  resp_parentesco: string | null
+  resp_estado_civil: string | null
+  resp_genero: string | null
+  material_solicitado: string | null
+  consentimento_imagem: boolean | null
   criado_em: string
 }
 
@@ -76,14 +97,14 @@ interface Encaminhamento {
 // Linha da ficha em edição: ganha uma chave só para a tela (a linha nova ainda não tem id)
 type Linha<T> = T & { _k: number }
 
-const EVENTOS = ['Vendaval', 'Temporal', 'Alagamento / enchente', 'Incêndio', 'Erosão de margem fluvial', 'Estiagem', 'Cesta básica', 'Outro']
-// Códigos que já aparecem nos termos da Assistência; quem confirma o código de cada evento é a assistente social.
-const COBRADES: { codigo: string; nome: string }[] = [
-  { codigo: '1.3.2.1.4', nome: 'Chuvas intensas' },
-  { codigo: '1.3.2.1.5', nome: 'Vendaval' },
-  { codigo: '2.3.1.2.0', nome: 'Incêndio em aglomerado residencial' },
-  { codigo: '1.1.4.2.0', nome: 'Erosão de margem fluvial' },
-]
+const EVENTOS = ['Vendaval', 'Temporal', 'Alagamento / enchente', 'Deslizamento', 'Incêndio', 'Erosão de margem fluvial', 'Estiagem', 'Seca', 'Cesta básica', 'Outro']
+const TIPIFICACOES: [string, string][] = [['deslizamento', 'Deslizamento'], ['tempestade', 'Tempestade'], ['incendio', 'Incêndio'], ['alagamento', 'Alagamento'], ['outros', 'Outros']]
+const AREAS: [string, string][] = [['urbana', 'Urbana'], ['rural', 'Rural']]
+const IMOVEIS: [string, string][] = [['residencial', 'Residencial'], ['comercial', 'Comercial']]
+const RESIDENCIAS: [string, string][] = [['alvenaria', 'Alvenaria'], ['madeira', 'Madeira'], ['misto', 'Misto'], ['barro', 'Barro'], ['outros', 'Outros']]
+const PROPRIEDADES: [string, string][] = [['propria', 'Própria'], ['cedida', 'Cedida'], ['alugada', 'Alugada']]
+const NECESSIDADES: [string, string][] = [['alimentacao', 'Alimentação'], ['saude', 'Saúde']]
+const ABRIGOS: [string, string][] = [['desabrigados', 'Desabrigados'], ['desalojados', 'Desalojados']]
 const DANOS = ['Perda total', 'Perda parcial', 'Danos em móveis ou eletrodomésticos', 'Perda de documentos']
 const SOLICITACOES = ['Cesta básica', 'Água potável', 'Colchão', 'Geladeira', 'Itens necessários', 'Kit de higiene', 'Auxílio aluguel (abrigo temporário)']
 const PARENTESCOS = ['Esposo', 'Esposa', 'Filho', 'Filha', 'Pai', 'Mãe', 'Avô', 'Avó', 'Irmão', 'Irmã', 'Neto', 'Neta', 'Outro']
@@ -100,6 +121,7 @@ const SITUACAO_COR: Record<Situacao, string> = {
   em_atendimento: 'bg-yellow-100 text-yellow-700', acompanhamento: 'bg-blue-100 text-blue-700', encerrado: 'bg-gray-200 text-gray-600',
 }
 
+const numOuNull = (v: unknown): number | null => (v === null || v === undefined || v === '' || isNaN(Number(v))) ? null : Number(v)
 const dataBR = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-BR') : '—'
 const vazioNull = (v: string | null | undefined) => (v ?? '').trim() === '' ? null : (v as string).trim()
 const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -148,6 +170,27 @@ const SimNaoVazio: React.FC<{ value: boolean | null; onChange: (v: boolean | nul
     onChange={e => onChange(e.target.value === 's' ? true : e.target.value === 'n' ? false : null)}>
     <option value="">—</option><option value="s">Sim</option><option value="n">Não</option>
   </select>
+)
+
+// Escolha única (como as caixinhas do formulário de papel). Tocar de novo na opção marcada desmarca.
+const Escolha: React.FC<{ valor: string | null | undefined; opcoes: [string, string][]; onChange: (v: string | null) => void }> = ({ valor, opcoes, onChange }) => (
+  <div className="flex flex-wrap gap-x-4 gap-y-1">
+    {opcoes.map(([v, rot]) => (
+      <label key={v} className="flex items-center gap-1.5 text-sm cursor-pointer">
+        <input type="radio" checked={valor === v} onChange={() => onChange(v)} onClick={() => { if (valor === v) onChange(null) }} /> {rot}
+      </label>
+    ))}
+  </div>
+)
+// Várias marcações possíveis
+const Marcas: React.FC<{ valor: string[] | null | undefined; opcoes: [string, string][]; onToggle: (v: string) => void }> = ({ valor, opcoes, onToggle }) => (
+  <div className="flex flex-wrap gap-x-4 gap-y-1">
+    {opcoes.map(([v, rot]) => (
+      <label key={v} className="flex items-center gap-1.5 text-sm cursor-pointer">
+        <input type="checkbox" checked={(valor || []).includes(v)} onChange={() => onToggle(v)} /> {rot}
+      </label>
+    ))}
+  </div>
 )
 
 interface Props { somenteLeitura: boolean }
@@ -232,7 +275,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
   const itensSugeridos = useMemo(() => [...new Set([...ITENS_SUGERIDOS, ...entregas.map(e => e.item)])], [entregas])
 
   const abrirNovo = () => {
-    setFicha({ situacao: 'em_atendimento', danos: [], solicitacoes: [], tem_idoso: false, tem_gestante_lactante: false, tem_pcd: false })
+    setFicha({ situacao: 'em_atendimento', danos: [], solicitacoes: [], tipificacao: [], necessidades_basicas: [], abrigo: [], tem_idoso: false, tem_gestante_lactante: false, tem_pcd: false })
     setFMembros([]); setFEntregas([]); setFEncs([])
     setAberto(true)
   }
@@ -245,7 +288,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
   }
 
   const set = <K extends keyof Atendimento>(k: K, v: Atendimento[K] | null) => setFicha(f => ({ ...f, [k]: v }))
-  const alternar = (campo: 'danos' | 'solicitacoes', valor: string) =>
+  const alternar = (campo: 'danos' | 'solicitacoes' | 'tipificacao' | 'necessidades_basicas' | 'abrigo', valor: string) =>
     setFicha(f => {
       const atual = f[campo] || []
       return { ...f, [campo]: atual.includes(valor) ? atual.filter(x => x !== valor) : [...atual, valor] }
@@ -278,6 +321,9 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
   const salvar = async () => {
     if (somenteLeitura) return
     if (!(ficha.resp_nome || '').trim()) { alert('Informe o nome do responsável familiar.'); return }
+    for (const [v, rot] of [[ficha.pessoas_afetadas, 'Pessoas afetadas'], [ficha.familias_afetadas, 'Famílias afetadas'], [ficha.renda_familiar, 'Renda familiar']] as const) {
+      if (v !== null && v !== undefined && !(Number(v) >= 0)) { alert(`${rot}: informe um número igual ou maior que zero.`); return }
+    }
     if (fMembros.some(m => !m.nome.trim())) { alert('Há uma pessoa do núcleo familiar sem nome.'); return }
     if (fEntregas.some(e => !e.item.trim())) { alert('Há uma entrega sem o item preenchido.'); return }
     if (fEntregas.some(e => !(Number(e.quantidade) > 0))) { alert('A quantidade de cada entrega precisa ser maior que zero.'); return }
@@ -301,6 +347,20 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
         vulnerabilidade: ficha.vulnerabilidade || null,
         area_app: ficha.area_app ?? null, acomp_psicossocial: ficha.acomp_psicossocial ?? null, nasf: ficha.nasf ?? null,
         observacoes: vazioNull(ficha.observacoes),
+        hora_ocorrencia: ficha.hora_ocorrencia || null,
+        tipificacao: ficha.tipificacao || [],
+        tipificacao_outros: (ficha.tipificacao || []).includes('outros') ? vazioNull(ficha.tipificacao_outros) : null,
+        area_afetada: ficha.area_afetada || null, tipo_imovel: ficha.tipo_imovel || null,
+        tipo_residencia: ficha.tipo_residencia || null,
+        tipo_residencia_outros: ficha.tipo_residencia === 'outros' ? vazioNull(ficha.tipo_residencia_outros) : null,
+        propriedade: ficha.propriedade || null,
+        necessidades_basicas: ficha.necessidades_basicas || [], abrigo: ficha.abrigo || [],
+        pessoas_afetadas: numOuNull(ficha.pessoas_afetadas), familias_afetadas: numOuNull(ficha.familias_afetadas),
+        danos_materiais: vazioNull(ficha.danos_materiais), renda_familiar: numOuNull(ficha.renda_familiar),
+        resp_nascimento: ficha.resp_nascimento || null, resp_parentesco: vazioNull(ficha.resp_parentesco),
+        resp_estado_civil: vazioNull(ficha.resp_estado_civil), resp_genero: vazioNull(ficha.resp_genero),
+        material_solicitado: vazioNull(ficha.material_solicitado),
+        consentimento_imagem: ficha.consentimento_imagem ?? null,
         atualizado_em: new Date().toISOString(),
       }
       let id = ficha.id
@@ -459,7 +519,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                   {a.vulnerabilidade === 'alta' && <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-error-expired/10 text-error-expired">VULNERABILIDADE ALTA</span>}
                 </div>
                 <div className="text-xs text-text-secondary mt-1">
-                  {a.protocolo || 'sem processo'} · {a.evento || 'sem evento'}{a.cobrade ? ` (COBRADE ${a.cobrade})` : ''} · visita: {dataBR(a.data_visita)} · {membrosDe.get(a.id) || 0} no núcleo familiar
+                  {a.protocolo || 'sem processo'} · {a.evento || 'sem evento'}{a.cobrade ? ` (COBRADE ${a.cobrade}${nomeCobrade(a.cobrade) ? ' ' + nomeCobrade(a.cobrade) : ''})` : ''} · visita: {dataBR(a.data_visita)} · {membrosDe.get(a.id) || 0} no núcleo familiar
                 </div>
                 <div className="text-xs text-text-secondary">
                   {[a.endereco, a.bairro_comunidade, a.resp_telefone].filter(Boolean).join(' · ') || 'sem endereço'}
@@ -490,7 +550,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
 
             <fieldset disabled={somenteLeitura || salvando} className="p-5 overflow-y-auto space-y-4 min-w-0">
               <datalist id="dl-eventos">{EVENTOS.map(e => <option key={e} value={e} />)}</datalist>
-              <datalist id="dl-cobrade">{COBRADES.map(c => <option key={c.codigo} value={c.codigo}>{c.nome}</option>)}</datalist>
+              <datalist id="dl-cobrade">{COBRADES.map(c => <option key={c.codigo} value={c.codigo} label={`${c.nome} (${c.grupo})`} />)}</datalist>
               <datalist id="dl-itens">{itensSugeridos.map(i => <option key={i} value={i} />)}</datalist>
               <datalist id="dl-orgaos">{ORGAOS.map(o => <option key={o} value={o} />)}</datalist>
               <datalist id="dl-parentesco">{PARENTESCOS.map(o => <option key={o} value={o} />)}</datalist>
@@ -506,27 +566,6 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                 ))}
               </div>
 
-              <Secao titulo="Atendimento">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div><Rotulo>Processo</Rotulo>
-                    <input className={classeInput} disabled value={ficha.protocolo || 'gerado ao salvar'} readOnly /></div>
-                  <div><Rotulo>Evento</Rotulo>
-                    <input className={classeInput} list="dl-eventos" value={ficha.evento || ''} onChange={e => set('evento', e.target.value)} /></div>
-                  <div><Rotulo>COBRADE (opcional)</Rotulo>
-                    <input className={classeInput} list="dl-cobrade" value={ficha.cobrade || ''} onChange={e => set('cobrade', e.target.value)} /></div>
-                  <div><Rotulo>Situação</Rotulo>
-                    <select className={classeInput} value={ficha.situacao || 'em_atendimento'} onChange={e => set('situacao', e.target.value as Situacao)}>
-                      {(Object.keys(SITUACAO_LABEL) as Situacao[]).map(s => <option key={s} value={s}>{SITUACAO_LABEL[s]}</option>)}
-                    </select></div>
-                  <div><Rotulo>Data do cadastro</Rotulo>
-                    <input type="date" className={classeInput} value={ficha.data_cadastro || ''} onChange={e => set('data_cadastro', e.target.value || null)} /></div>
-                  <div><Rotulo>Data da visita</Rotulo>
-                    <input type="date" className={classeInput} value={ficha.data_visita || ''} onChange={e => set('data_visita', e.target.value || null)} /></div>
-                  <div><Rotulo>Data da ocorrência</Rotulo>
-                    <input type="date" className={classeInput} value={ficha.data_ocorrencia || ''} onChange={e => set('data_ocorrencia', e.target.value || null)} /></div>
-                </div>
-              </Secao>
-
               <Secao titulo="Responsável familiar">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="md:col-span-2"><Rotulo>Nome *</Rotulo>
@@ -535,59 +574,66 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                     <input className={classeInput} value={ficha.resp_cpf || ''} onChange={e => set('resp_cpf', e.target.value)} /></div>
                   <div><Rotulo>RG</Rotulo>
                     <input className={classeInput} value={ficha.resp_rg || ''} onChange={e => set('resp_rg', e.target.value)} /></div>
-                  <div><Rotulo>Telefone</Rotulo>
-                    <input className={classeInput} value={ficha.resp_telefone || ''} onChange={e => set('resp_telefone', e.target.value)} /></div>
+                  <div><Rotulo>Data de nascimento</Rotulo>
+                    <input type="date" className={classeInput} value={ficha.resp_nascimento || ''} onChange={e => set('resp_nascimento', e.target.value || null)} /></div>
+                  <div><Rotulo>Idade</Rotulo>
+                    <input className={classeInput} disabled readOnly value={idade(ficha.resp_nascimento || null)} /></div>
+                  <div><Rotulo>Parentesco</Rotulo>
+                    <input className={classeInput} list="dl-parentesco" value={ficha.resp_parentesco || ''} onChange={e => set('resp_parentesco', e.target.value)} /></div>
+                  <div><Rotulo>Estado civil</Rotulo>
+                    <input className={classeInput} list="dl-civil" value={ficha.resp_estado_civil || ''} onChange={e => set('resp_estado_civil', e.target.value)} /></div>
                   <div className="md:col-span-2"><Rotulo>Endereço</Rotulo>
                     <input className={classeInput} value={ficha.endereco || ''} onChange={e => set('endereco', e.target.value)} /></div>
-                  <div><Rotulo>Bairro ou comunidade</Rotulo>
-                    <input className={classeInput} value={ficha.bairro_comunidade || ''} onChange={e => set('bairro_comunidade', e.target.value)} /></div>
-                  <div className="md:col-span-4"><Rotulo>Ponto de referência</Rotulo>
-                    <input className={classeInput} value={ficha.ponto_referencia || ''} onChange={e => set('ponto_referencia', e.target.value)} /></div>
+                  <div><Rotulo>Renda familiar (R$)</Rotulo>
+                    <input type="number" min={0} step="0.01" className={classeInput} value={ficha.renda_familiar ?? ''}
+                      onChange={e => set('renda_familiar', e.target.value === '' ? null : Number(e.target.value))} /></div>
+                  <div><Rotulo>Gênero</Rotulo>
+                    <input className={classeInput} list="dl-genero" value={ficha.resp_genero || ''} onChange={e => set('resp_genero', e.target.value)} /></div>
+                  <div><Rotulo>Contato (telefone)</Rotulo>
+                    <input className={classeInput} value={ficha.resp_telefone || ''} onChange={e => set('resp_telefone', e.target.value)} /></div>
                 </div>
               </Secao>
 
-              <Secao titulo="Visita domiciliar">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Rotulo>Danos sofridos</Rotulo>
-                    {DANOS.map(d => (
-                      <label key={d} className="flex items-center gap-2 text-sm mb-1 cursor-pointer">
-                        <input type="checkbox" checked={(ficha.danos || []).includes(d)} onChange={() => alternar('danos', d)} /> {d}
-                      </label>
-                    ))}
-                  </div>
-                  <div>
-                    <Rotulo>Solicitações</Rotulo>
-                    {SOLICITACOES.map(s => (
-                      <label key={s} className="flex items-center gap-2 text-sm mb-1 cursor-pointer">
-                        <input type="checkbox" checked={(ficha.solicitacoes || []).includes(s)} onChange={() => alternar('solicitacoes', s)} /> {s}
-                      </label>
-                    ))}
-                  </div>
+              <Secao titulo="Identificação do desastre">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div><Rotulo>Data da ocorrência</Rotulo>
+                    <input type="date" className={classeInput} value={ficha.data_ocorrencia || ''} onChange={e => set('data_ocorrencia', e.target.value || null)} /></div>
+                  <div><Rotulo>Horário</Rotulo>
+                    <input type="time" className={classeInput} value={(ficha.hora_ocorrencia || '').slice(0, 5)} onChange={e => set('hora_ocorrencia', e.target.value || null)} /></div>
+                  <div><Rotulo>Evento (nome, para agrupar)</Rotulo>
+                    <input className={classeInput} list="dl-eventos" value={ficha.evento || ''} onChange={e => set('evento', e.target.value)} /></div>
+                  <div><Rotulo>COBRADE (opcional)</Rotulo>
+                    <input className={classeInput} list="dl-cobrade" placeholder="código ou nome" value={ficha.cobrade || ''} onChange={e => set('cobrade', e.target.value)} />
+                    {nomeCobrade(ficha.cobrade) && <p className="text-[11px] text-text-secondary mt-1">{nomeCobrade(ficha.cobrade)}</p>}</div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
-                  <div><Rotulo>Nº de cômodos</Rotulo>
-                    <input type="number" min={0} className={classeInput} value={ficha.comodos ?? ''}
-                      onChange={e => set('comodos', e.target.value === '' ? null : Number(e.target.value))} /></div>
-                  <div><Rotulo>Energia elétrica</Rotulo>
-                    <input className={classeInput} placeholder="Sim / Não" value={ficha.energia || ''} onChange={e => set('energia', e.target.value)} /></div>
-                  <div><Rotulo>Abastecimento de água</Rotulo>
-                    <input className={classeInput} value={ficha.agua || ''} onChange={e => set('agua', e.target.value)} /></div>
-                  <div><Rotulo>Saneamento básico</Rotulo>
-                    <input className={classeInput} value={ficha.saneamento || ''} onChange={e => set('saneamento', e.target.value)} /></div>
-                  <div><Rotulo>Grau de vulnerabilidade</Rotulo>
-                    <select className={classeInput} value={ficha.vulnerabilidade || ''} onChange={e => set('vulnerabilidade', (e.target.value || null) as Atendimento['vulnerabilidade'])}>
-                      <option value="">—</option><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option>
-                    </select></div>
-                  <div><Rotulo>Área de APP</Rotulo>
-                    <SimNaoVazio value={ficha.area_app ?? null} onChange={v => set('area_app', v)} /></div>
-                  <div><Rotulo>Acomp. psicossocial</Rotulo>
-                    <SimNaoVazio value={ficha.acomp_psicossocial ?? null} onChange={v => set('acomp_psicossocial', v)} /></div>
-                  <div><Rotulo>NASF</Rotulo>
-                    <SimNaoVazio value={ficha.nasf ?? null} onChange={v => set('nasf', v)} /></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 mt-4">
+                  <div className="md:col-span-2"><Rotulo>Tipificação</Rotulo>
+                    <Marcas valor={ficha.tipificacao} opcoes={TIPIFICACOES} onToggle={v => alternar('tipificacao', v)} />
+                    {(ficha.tipificacao || []).includes('outros') && (
+                      <input className={classeInput + ' mt-2'} placeholder="Outros: qual?" value={ficha.tipificacao_outros || ''} onChange={e => set('tipificacao_outros', e.target.value)} />
+                    )}</div>
+                  <div><Rotulo>Área afetada</Rotulo><Escolha valor={ficha.area_afetada} opcoes={AREAS} onChange={v => set('area_afetada', v)} /></div>
+                  <div><Rotulo>Tipo de imóvel</Rotulo><Escolha valor={ficha.tipo_imovel} opcoes={IMOVEIS} onChange={v => set('tipo_imovel', v)} /></div>
+                  <div className="md:col-span-2"><Rotulo>Tipo de residência</Rotulo>
+                    <Escolha valor={ficha.tipo_residencia} opcoes={RESIDENCIAS} onChange={v => set('tipo_residencia', v)} />
+                    {ficha.tipo_residencia === 'outros' && (
+                      <input className={classeInput + ' mt-2'} placeholder="Outros: qual?" value={ficha.tipo_residencia_outros || ''} onChange={e => set('tipo_residencia_outros', e.target.value)} />
+                    )}</div>
+                  <div><Rotulo>Propriedade</Rotulo><Escolha valor={ficha.propriedade} opcoes={PROPRIEDADES} onChange={v => set('propriedade', v)} /></div>
+                  <div><Rotulo>Necessidades básicas</Rotulo><Marcas valor={ficha.necessidades_basicas} opcoes={NECESSIDADES} onToggle={v => alternar('necessidades_basicas', v)} /></div>
+                  <div><Rotulo>Situação da família</Rotulo><Marcas valor={ficha.abrigo} opcoes={ABRIGOS} onToggle={v => alternar('abrigo', v)} /></div>
                 </div>
-                <div className="mt-3"><Rotulo>Observações</Rotulo>
-                  <textarea rows={3} className={classeInput + ' resize-none'} value={ficha.observacoes || ''} onChange={e => set('observacoes', e.target.value)} /></div>
+                <h4 className="text-xs font-bold uppercase text-text-secondary mt-5 mb-2">Danos humanos</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div><Rotulo>Pessoas afetadas</Rotulo>
+                    <input type="number" min={0} className={classeInput} value={ficha.pessoas_afetadas ?? ''}
+                      onChange={e => set('pessoas_afetadas', e.target.value === '' ? null : Number(e.target.value))} /></div>
+                  <div><Rotulo>Famílias afetadas</Rotulo>
+                    <input type="number" min={0} className={classeInput} value={ficha.familias_afetadas ?? ''}
+                      onChange={e => set('familias_afetadas', e.target.value === '' ? null : Number(e.target.value))} /></div>
+                </div>
+                <div className="mt-3"><Rotulo>Danos materiais</Rotulo>
+                  <textarea rows={4} className={classeInput + ' resize-none'} value={ficha.danos_materiais || ''} onChange={e => set('danos_materiais', e.target.value)} /></div>
               </Secao>
 
               <Secao titulo={`Núcleo familiar (${fMembros.length})`} acao={!somenteLeitura && (
@@ -620,6 +666,64 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                     )
                   })}
                 </div>
+              </Secao>
+
+              <Secao titulo="Termo de consentimento para registro fotográfico">
+                <p className="text-sm text-text-secondary mb-2">O termo é assinado no papel pelo usuário e pela assistente social. Marque aqui se foi assinado.</p>
+                <Escolha valor={ficha.consentimento_imagem === true ? 's' : ficha.consentimento_imagem === false ? 'n' : null}
+                  opcoes={[['s', 'Assinado'], ['n', 'Não assinado']]} onChange={v => set('consentimento_imagem', v === 's' ? true : v === 'n' ? false : null)} />
+              </Secao>
+
+              <Secao titulo="Complemento da visita">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                  <div><Rotulo>Bairro ou comunidade</Rotulo>
+                    <input className={classeInput} value={ficha.bairro_comunidade || ''} onChange={e => set('bairro_comunidade', e.target.value)} /></div>
+                  <div className="md:col-span-2"><Rotulo>Ponto de referência</Rotulo>
+                    <input className={classeInput} value={ficha.ponto_referencia || ''} onChange={e => set('ponto_referencia', e.target.value)} /></div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Rotulo>Danos sofridos</Rotulo>
+                    {DANOS.map(d => (
+                      <label key={d} className="flex items-center gap-2 text-sm mb-1 cursor-pointer">
+                        <input type="checkbox" checked={(ficha.danos || []).includes(d)} onChange={() => alternar('danos', d)} /> {d}
+                      </label>
+                    ))}
+                  </div>
+                  <div>
+                    <Rotulo>Solicitações</Rotulo>
+                    {SOLICITACOES.map(s => (
+                      <label key={s} className="flex items-center gap-2 text-sm mb-1 cursor-pointer">
+                        <input type="checkbox" checked={(ficha.solicitacoes || []).includes(s)} onChange={() => alternar('solicitacoes', s)} /> {s}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-3"><Rotulo>Material solicitado</Rotulo>
+                  <input className={classeInput} placeholder="Ex.: 30 folhas de alumínio" value={ficha.material_solicitado || ''} onChange={e => set('material_solicitado', e.target.value)} /></div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                  <div><Rotulo>Nº de cômodos</Rotulo>
+                    <input type="number" min={0} className={classeInput} value={ficha.comodos ?? ''}
+                      onChange={e => set('comodos', e.target.value === '' ? null : Number(e.target.value))} /></div>
+                  <div><Rotulo>Energia elétrica</Rotulo>
+                    <input className={classeInput} placeholder="Sim / Não" value={ficha.energia || ''} onChange={e => set('energia', e.target.value)} /></div>
+                  <div><Rotulo>Abastecimento de água</Rotulo>
+                    <input className={classeInput} value={ficha.agua || ''} onChange={e => set('agua', e.target.value)} /></div>
+                  <div><Rotulo>Saneamento básico</Rotulo>
+                    <input className={classeInput} value={ficha.saneamento || ''} onChange={e => set('saneamento', e.target.value)} /></div>
+                  <div><Rotulo>Grau de vulnerabilidade</Rotulo>
+                    <select className={classeInput} value={ficha.vulnerabilidade || ''} onChange={e => set('vulnerabilidade', (e.target.value || null) as Atendimento['vulnerabilidade'])}>
+                      <option value="">—</option><option value="baixa">Baixa</option><option value="media">Média</option><option value="alta">Alta</option>
+                    </select></div>
+                  <div><Rotulo>Área de APP</Rotulo>
+                    <SimNaoVazio value={ficha.area_app ?? null} onChange={v => set('area_app', v)} /></div>
+                  <div><Rotulo>Acomp. psicossocial</Rotulo>
+                    <SimNaoVazio value={ficha.acomp_psicossocial ?? null} onChange={v => set('acomp_psicossocial', v)} /></div>
+                  <div><Rotulo>NASF</Rotulo>
+                    <SimNaoVazio value={ficha.nasf ?? null} onChange={v => set('nasf', v)} /></div>
+                </div>
+                <div className="mt-3"><Rotulo>Observações</Rotulo>
+                  <textarea rows={3} className={classeInput + ' resize-none'} value={ficha.observacoes || ''} onChange={e => set('observacoes', e.target.value)} /></div>
               </Secao>
 
               <Secao titulo={`Entregas (${fEntregas.length})`} acao={!somenteLeitura && (
@@ -671,6 +775,21 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                       </div>
                     )
                   })}
+                </div>
+              </Secao>
+
+              <Secao titulo="Controle interno">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div><Rotulo>Processo</Rotulo>
+                    <input className={classeInput} disabled value={ficha.protocolo || 'gerado ao salvar'} readOnly /></div>
+                  <div><Rotulo>Situação</Rotulo>
+                    <select className={classeInput} value={ficha.situacao || 'em_atendimento'} onChange={e => set('situacao', e.target.value as Situacao)}>
+                      {(Object.keys(SITUACAO_LABEL) as Situacao[]).map(s => <option key={s} value={s}>{SITUACAO_LABEL[s]}</option>)}
+                    </select></div>
+                  <div><Rotulo>Data do cadastro</Rotulo>
+                    <input type="date" className={classeInput} value={ficha.data_cadastro || ''} onChange={e => set('data_cadastro', e.target.value || null)} /></div>
+                  <div><Rotulo>Data da visita</Rotulo>
+                    <input type="date" className={classeInput} value={ficha.data_visita || ''} onChange={e => set('data_visita', e.target.value || null)} /></div>
                 </div>
               </Secao>
             </fieldset>
