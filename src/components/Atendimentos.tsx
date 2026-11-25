@@ -97,7 +97,7 @@ interface Encaminhamento {
 // Linha da ficha em edição: ganha uma chave só para a tela (a linha nova ainda não tem id)
 type Linha<T> = T & { _k: number }
 
-const EVENTOS = ['Vendaval', 'Temporal', 'Alagamento / enchente', 'Deslizamento', 'Incêndio', 'Erosão de margem fluvial', 'Estiagem', 'Seca', 'Cesta básica', 'Outro']
+const EVENTOS = ['Vendaval', 'Temporal', 'Alagamento / enchente', 'Deslizamento', 'Incêndio', 'Erosão de margem fluvial', 'Estiagem', 'Seca', 'Cesta básica']
 const TIPIFICACOES: [string, string][] = [['deslizamento', 'Deslizamento'], ['tempestade', 'Tempestade'], ['incendio', 'Incêndio'], ['alagamento', 'Alagamento'], ['outros', 'Outros']]
 const AREAS: [string, string][] = [['urbana', 'Urbana'], ['rural', 'Rural']]
 const IMOVEIS: [string, string][] = [['residencial', 'Residencial'], ['comercial', 'Comercial']]
@@ -272,6 +272,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
   }, [lista, busca, filtroEvento, filtroSituacao])
 
   const eventosUsados = useMemo(() => [...new Set(lista.map(a => a.evento).filter(Boolean))].sort(), [lista])
+  const eventosSugeridos = useMemo(() => [...new Set([...EVENTOS, ...eventosUsados])], [eventosUsados])
   const itensSugeridos = useMemo(() => [...new Set([...ITENS_SUGERIDOS, ...entregas.map(e => e.item)])], [entregas])
 
   const abrirNovo = () => {
@@ -550,7 +551,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
 
             <div className="p-5 overflow-y-auto min-h-0 flex-1">
             <fieldset disabled={somenteLeitura || salvando} className="space-y-4 min-w-0">
-              <datalist id="dl-eventos">{EVENTOS.map(e => <option key={e} value={e} />)}</datalist>
+              <datalist id="dl-eventos">{eventosSugeridos.map(e => <option key={e} value={e} />)}</datalist>
               <datalist id="dl-cobrade">{COBRADES.map(c => <option key={c.codigo} value={c.codigo} label={`${c.nome} (${c.grupo})`} />)}</datalist>
               <datalist id="dl-itens">{itensSugeridos.map(i => <option key={i} value={i} />)}</datalist>
               <datalist id="dl-orgaos">{ORGAOS.map(o => <option key={o} value={o} />)}</datalist>
@@ -602,7 +603,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                   <div><Rotulo>Horário</Rotulo>
                     <input type="time" className={classeInput} value={(ficha.hora_ocorrencia || '').slice(0, 5)} onChange={e => set('hora_ocorrencia', e.target.value || null)} /></div>
                   <div><Rotulo>Evento (nome, para agrupar)</Rotulo>
-                    <input className={classeInput} list="dl-eventos" value={ficha.evento || ''} onChange={e => set('evento', e.target.value)} /></div>
+                    <input className={classeInput} list="dl-eventos" placeholder="escolha ou digite um evento novo" value={ficha.evento || ''} onChange={e => set('evento', e.target.value)} /></div>
                   <div><Rotulo>COBRADE (opcional)</Rotulo>
                     <input className={classeInput} list="dl-cobrade" placeholder="código ou nome" value={ficha.cobrade || ''} onChange={e => set('cobrade', e.target.value)} />
                     {nomeCobrade(ficha.cobrade) && <p className="text-[11px] text-text-secondary mt-1">{nomeCobrade(ficha.cobrade)}</p>}</div>
