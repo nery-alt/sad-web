@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { HeartHandshake, Plus, Search, Printer, Pencil, Trash2, X, Save } from 'lucide-react'
+import { HeartHandshake, Plus, Search, Printer, Pencil, Trash2, X, Save, FileText } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { norm } from '../lib/texto'
 import { COBRADES, nomeCobrade } from '../lib/cobrade'
+import { RelatorioSocialModal } from './RelatorioSocialModal'
 
 type Situacao = 'em_atendimento' | 'acompanhamento' | 'encerrado'
 
@@ -211,6 +212,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
   const [filtroSituacao, setFiltroSituacao] = useState('')
 
   const [aberto, setAberto] = useState(false)
+  const [relatorioDe, setRelatorioDe] = useState<Atendimento | null>(null)
   const [salvando, setSalvando] = useState(false)
   const [ficha, setFicha] = useState<Partial<Atendimento>>({})
   const [fMembros, setFMembros] = useState<Linha<Membro>[]>([])
@@ -531,6 +533,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                 </div>
               </div>
               <div className="flex gap-1 shrink-0">
+                <button onClick={() => setRelatorioDe(a)} title="Relatório Social (Word)" className="p-2 text-text-secondary hover:text-primary-btn"><FileText size={16} /></button>
                 <button onClick={() => abrirEditar(a)} title={somenteLeitura ? 'Ver ficha' : 'Editar'} className="p-2 text-text-secondary hover:text-primary-btn"><Pencil size={16} /></button>
                 {!somenteLeitura && <button onClick={() => apagar(a)} title="Apagar" className="p-2 text-text-secondary hover:text-error-expired"><Trash2 size={16} /></button>}
               </div>
@@ -808,6 +811,13 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {relatorioDe && (
+        <RelatorioSocialModal atendimento={relatorioDe} onClose={() => setRelatorioDe(null)}
+          membros={membros.filter(m => m.atendimento_id === relatorioDe.id)}
+          entregas={entregas.filter(e => e.atendimento_id === relatorioDe.id)}
+          encs={encs.filter(e => e.atendimento_id === relatorioDe.id)} />
       )}
     </div>
   )
