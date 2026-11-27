@@ -40,6 +40,7 @@ const App: React.FC = () => {
   const [loadingAuth, setLoadingAuth] = useState(true)
   const [isReadOnly, setIsReadOnly] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [verTudo, setVerTudo] = useState(false)   // Administrador (não geral) com poder de ver todos os setores
   // Setores do usuário logado (null = ainda carregando). Define quais abas aparecem no menu.
   const [setoresUsuario, setSetoresUsuario] = useState<string[] | null>(null)
 
@@ -88,17 +89,19 @@ const App: React.FC = () => {
 
   // Descobre o nível de acesso do usuário logado (tabela perfis)
   useEffect(() => {
-    if (!session) { setIsReadOnly(false); setIsAdmin(false); return }
+    if (!session) { setIsReadOnly(false); setIsAdmin(false); setVerTudo(false); return }
     const email = (session.user.email || '').toLowerCase()
-    supabase.from('perfis').select('papel').eq('email', email).maybeSingle()
+    supabase.from('perfis').select('papel, poder_ver_tudo').eq('email', email).maybeSingle()
       .then(async ({ data }) => {
         if (data) {
           setIsReadOnly(data.papel === 'leitura')
           setIsAdmin(data.papel === 'admin')
+          setVerTudo(data.papel === 'administrador' && !!data.poder_ver_tudo)
         } else {
           await supabase.from('perfis').insert({ email, papel: 'leitura' })
           setIsReadOnly(true)
           setIsAdmin(false)
+          setVerTudo(false)
         }
       })
   }, [session])
@@ -117,7 +120,7 @@ const App: React.FC = () => {
   }, [session])
 
   // Quem trabalha só na Assistência Social entra direto em Atendimentos.
-  const SO_ASSISTENCIA = (setoresUsuario || []).length > 0 && (setoresUsuario || []).every(s => s === 'Assistência Social') && !isAdmin && !isReadOnly
+  const SO_ASSISTENCIA = (setoresUsuario || []).length > 0 && (setoresUsuario || []).every(s => s === 'Assistência Social') && !isAdmin && !verTudo && !isReadOnly
   useEffect(() => {
     if (SO_ASSISTENCIA) setActiveTab(t => (t === 'Dashboard' ? 'Atendimentos' : t))
   }, [SO_ASSISTENCIA])
@@ -125,7 +128,7 @@ const App: React.FC = () => {
   // Menu por setor: Administrador Geral e leitura veem tudo; a Assistência vê só o que usa;
   // os demais não veem Atendimentos (a não ser que também trabalhem na Assistência).
   const abasSomente = SO_ASSISTENCIA ? ['Dashboard', 'Atendimentos', 'Agenda', 'Tarefas', 'Configurações'] : undefined
-  const abasOcultas = (isAdmin || isReadOnly || (setoresUsuario || []).includes('Assistência Social')) ? undefined : ['Atendimentos']
+  const abasOcultas = (isAdmin || verTudo || isReadOnly || (setoresUsuario || []).includes('Assistência Social')) ? undefined : ['Atendimentos']
 
   const fetchData = useCallback(async () => {
     const { data: p, error: pError } = await supabase.from('pessoas').select('*').order('nome')
@@ -472,7 +475,7 @@ const App: React.FC = () => {
       setSelectedProtocolo(prev => prev ? { ...prev, historico: JSON.stringify(historico) } : null)
   }
 
-  // ── Encaminhamentos ──────────────────────────────────────────────────
+  // ── Encaminhamentos ────────────────────────────────────────────────────────────────
   const handleSaveEncaminhamento = async (enc: Encaminhamento) => {
     if (bloqueadoSomenteLeitura()) return
     const now = new Date().toISOString()
