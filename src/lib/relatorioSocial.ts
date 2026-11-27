@@ -364,18 +364,50 @@ export function paragrafosDe(texto: string): string[] {
     /^[•-]\s+/.test(l) ? paragrafo('• ' + l.replace(/^[•-]\s+/, ''), 'marcador') : paragrafo(l, 'corpo'))
 }
 
-// Numa página do anexo (tabela de 2x2 quadros), deixa só as `n` primeiras fotos (mesmo ajuste do relatório de vistoria)
-function ajustarPagina(trecho: string, n: number): string {
-  const ini = trecho.indexOf('<w:tbl>'), fimT = trecho.lastIndexOf('</w:tbl>') + '</w:tbl>'.length
-  if (ini < 0) return trecho
-  let tbl = trecho.slice(ini, fimT)
+// Anexo de fotos: 2 por página, grandes (pedido da Secretaria de Assistência Social, para auditoria).
+// Cada página do modelo tem uma tabela 2x2 de fotos pequenas; aqui ela vira uma coluna só com 2 fotos 4:3 empilhadas.
+export const ASPECTO_FOTO_SOCIAL = 4 / 3
+const FOTO_W = 4464000, FOTO_H = 3348000   // 12,4 x 9,3 cm
+const COLUNA = 8358                         // largura da tabela em twips
+const limparPagina = (s: string) => s.replace(/<w:jc w:val="(both|distribute)"\/>/g, '<w:jc w:val="left"/>').replace(/<a:srcRect [^>]*\/>/g, '<a:srcRect/>')
+
+function paginaDeFotos(modelo: string, ids: string[], legendas: string[]): string {
+  const t0 = modelo.indexOf('<w:tbl>'), t1 = modelo.lastIndexOf('</w:tbl>') + '</w:tbl>'.length
+  if (t0 < 0) throw new Error('Modelo de relatório mudou: tabela de fotos não encontrada.')
+  let tbl = limparPagina(modelo.slice(t0, t1))
+  tbl = tbl.replace(/<w:gridCol w:w="\d+"\/><w:gridCol w:w="\d+"\/>/, `<w:gridCol w:w="${COLUNA}"/>`)
+  // só a primeira coluna
+  tbl = tbl.replace(/<w:tr[ >][\s\S]*?<\/w:tr>/g, row => {
+    const cels = row.match(/<w:tc>[\s\S]*?<\/w:tc>/g)
+    if (!cels) return row
+    const ini = row.indexOf(cels[0]), fim = row.indexOf(cels[cels.length - 1]) + cels[cels.length - 1].length
+    return row.slice(0, ini) + cels[0].replace(/<w:tcW w:w="\d+" w:type="dxa"\/>/, `<w:tcW w:w="${COLUNA}" w:type="dxa"/>`) + row.slice(fim)
+  })
+  const linhas = tbl.match(/<w:tr[ >][\s\S]*?<\/w:tr>/g) || []
+  if (linhas.length !== 4) throw new Error('Modelo de relatório mudou: tabela de fotos diferente do esperado.')
+  if (ids.length === 1) tbl = tbl.replace(linhas[2] + linhas[3], '')
   let k = 0
-  tbl = tbl.replace(/<w:drawing>[\s\S]*?<\/w:drawing>/g, d => (d.includes('r:embed=') && ++k > n) ? '' : d)
-  if (n <= 2) {
-    const linhas = [...tbl.matchAll(/<w:tr[ >]/g)].map(m => m.index!)
-    if (linhas.length === 4) tbl = tbl.slice(0, linhas[2]) + tbl.slice(tbl.lastIndexOf('</w:tr>') + '</w:tr>'.length)
-  }
-  return trecho.slice(0, ini) + tbl + trecho.slice(fimT)
+  tbl = tbl.replace(/r:embed="rId\d+"/g, () => `r:embed="${ids[k++]}"`)
+  tbl = tbl.replace(/cx="2545080" cy="2798445"/g, `cx="${FOTO_W}" cy="${FOTO_H}"`)
+  let l = 0
+  tbl = tbl.replace(/\{leg\d\}/g, () => esc(legendas[l++] ?? ''))
+  // foto e legenda centralizadas
+  tbl = tbl.replace(/<w:jc w:val="(left|both)"\/>/g, '<w:jc w:val="center"/>')
+  tbl = tbl.replace(/<w:spacing w:after="0" w:line="276" w:lineRule="auto"\/><w:rPr>(?=(?:(?!<\/w:p>)[\s\S])*<w:drawing>)/g, '<w:spacing w:after="0" w:line="276" w:lineRule="auto"/><w:jc w:val="center"/><w:rPr>')
+  // a primeira linha do modelo (marcador) vira quebra de página
+  const cabeca = modelo.slice(0, t0).replace(/^<w:p>[\s\S]*?<\/w:p>/, '<w:p><w:r><w:br w:type="page"/></w:r></w:p>')
+  return limparPagina(cabeca) + tbl + modelo.slice(t1)
+}
+
+// páginas repetidas do modelo ficam com identificadores próprios
+function renumerar(pag: string, n: number): string {
+  let a = 0, b = 0, c = 0
+  return pag
+    .replace(/w14:paraId="[0-9A-F]+"/g, () => `w14:paraId="${(0x30000000 + n * 1000 + a++).toString(16).toUpperCase().padStart(8, '0')}"`)
+    .replace(/w14:textId="[0-9A-F]+"/g, () => `w14:textId="${(0x31000000 + n * 1000 + b++).toString(16).toUpperCase().padStart(8, '0')}"`)
+    .replace(/<wp:docPr id="\d+"/g, () => `<wp:docPr id="${7000 + n * 100 + c++}"`)
+    .replace(/<pic:cNvPr id="\d+"/g, () => `<pic:cNvPr id="${7500 + n * 100 + c++}"`)
+    .replace(/o:spid="_x0000_s\d+"/g, `o:spid="_x0000_s${3000 + n}"`)
 }
 
 const fimP = (xml: string, i: number) => xml.indexOf('</w:p>', i) + '</w:p>'.length
@@ -426,10 +458,6 @@ export async function gerarRelatorioSocial(d: DadosRelatorioSocial): Promise<Blo
     visto_nome: d.visto.nome, visto_cargo: d.visto.cargo, visto_decreto: d.visto.decreto,
     data_extenso: dataExtenso(d.dataEmissao),
   }
-  for (let k = 1; k <= 8; k++) {
-    const f = fotos[k - 1]
-    valores[`leg${k}`] = f ? `Foto ${String(k).padStart(2, '0')} – ${f.legenda.trim()}` : ''
-  }
   xml = xml.replace(/\{(\w+)\}/g, (tag, chave: string) => chave in valores ? esc(valores[chave]) : tag)
 
   // Primeira página: identificação (um parágrafo por linha)
@@ -470,12 +498,14 @@ export async function gerarRelatorioSocial(d: DadosRelatorioSocial): Promise<Blo
     const pa = inicioP(xml, xml.indexOf('<w:t>{{ANEXO_INI}}</w:t>'))
     const pb = inicioP(xml, xml.indexOf('<w:t>{{ANEXO2_INI}}</w:t>'))
     const pc = inicioP(xml, xml.indexOf('<w:t>{{ANEXO_FIM}}</w:t>'))
-    const limpar = (s: string) => s.replace(/<w:jc w:val="(both|distribute)"\/>/g, '<w:jc w:val="left"/>').replace(/<a:srcRect [^>]*\/>/g, '<a:srcRect/>')
-    const pag1 = limpar(ajustarPagina(xml.slice(pa, pb), Math.min(fotos.length, 4)))
-    const pag2 = fotos.length > 4 ? limpar(ajustarPagina(xml.slice(pb, pc), fotos.length - 4)) : ''
-    xml = xml.slice(0, pa) + pag1 + pag2 + xml.slice(pc)
-    if (pag2) xml = trocarParagrafo(xml, '{{ANEXO2_INI}}', ['<w:r><w:br w:type="page"/></w:r>'])
-    xml = trocarParagrafo(xml, '{{ANEXO_INI}}', ['<w:r><w:br w:type="page"/></w:r>'])
+    const modelos = [xml.slice(pa, pb), xml.slice(pb, pc)]
+    const legendas = fotos.map((f, k) => `Foto ${String(k + 1).padStart(2, '0')} – ${f.legenda.trim()}`)
+    const paginas: string[] = []
+    for (let p = 0; p * 2 < fotos.length; p++) {
+      const de = p * 2, ate = Math.min(de + 2, fotos.length)
+      paginas.push(renumerar(paginaDeFotos(modelos[p % 2], ids.slice(de, ate), legendas.slice(de, ate)), p))
+    }
+    xml = xml.slice(0, pa) + paginas.join('') + xml.slice(pc)
     xml = trocarParagrafo(xml, '{{ANEXO_FIM}}', [''])
   }
 
