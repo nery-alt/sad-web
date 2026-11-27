@@ -278,7 +278,10 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
   if (auxilios.length) s5.push(`Solicita-se a concessão ${auxilios.length === 1 ? 'do benefício eventual' : 'dos benefícios eventuais'}: ${lista(auxilios)}.`)
   if (outras.length) s5.push(`Solicita-se o atendimento emergencial com: ${lista(outras)}.`)
   if (materialTxt) s5.push(`Material solicitado: ${comPonto(materialTxt)}`)
-  if (entregas.length) s5.push(`Já foram realizadas as seguintes entregas: ${entregas.map(e => `${aj(e.item)} (${e.quantidade})${e.data_entrega ? ` em ${dataCurta(e.data_entrega)}` : ''}`).join('; ')}.`)
+  // item com data de entrega = entregue; sem data = ainda pendente
+  const feitas = entregas.filter(e => e.data_entrega), pendentes = entregas.filter(e => !e.data_entrega)
+  if (feitas.length) s5.push(`Já foram realizadas as seguintes entregas: ${feitas.map(e => `${aj(e.item)} (${e.quantidade}) em ${dataCurta(e.data_entrega)}`).join('; ')}.`)
+  if (pendentes.length) s5.push(`Aguardam entrega: ${pendentes.map(e => `${aj(e.item)} (${e.quantidade})`).join('; ')}.`)
   const orgaos = [...new Set(encs.map(e => e.orgao.trim()).filter(Boolean))]
   for (const e of encs.filter(x => (x.obs || '').trim())) {
     const o = e.orgao.trim(), ob = aj((e.obs || '').trim()).replace(/\.$/, '')
