@@ -86,6 +86,14 @@ interface Entrega {
   obs: string | null
 }
 
+interface Grupo {
+  id?: number
+  atendimento_id?: number
+  tipo: 'idoso' | 'gestante' | 'lactante' | 'pcd'
+  nome: string | null
+  detalhe: string | null
+}
+
 interface Encaminhamento {
   id?: number
   atendimento_id?: number
@@ -105,6 +113,7 @@ const IMOVEIS: [string, string][] = [['residencial', 'Residencial'], ['comercial
 const RESIDENCIAS: [string, string][] = [['alvenaria', 'Alvenaria'], ['madeira', 'Madeira'], ['misto', 'Misto'], ['barro', 'Barro'], ['outros', 'Outros']]
 const PROPRIEDADES: [string, string][] = [['propria', 'Própria'], ['cedida', 'Cedida'], ['alugada', 'Alugada']]
 const NECESSIDADES: [string, string][] = [['alimentacao', 'Alimentação'], ['saude', 'Saúde']]
+const TIPOS_GRUPO: [string, string][] = [['idoso', 'Idoso'], ['gestante', 'Gestante'], ['lactante', 'Lactante'], ['pcd', 'Pessoa com deficiência']]
 const ABRIGOS: [string, string][] = [['desabrigados', 'Desabrigados'], ['desalojados', 'Desalojados']]
 const DANOS = ['Perda total', 'Perda parcial', 'Danos em móveis ou eletrodomésticos', 'Perda de documentos']
 const SOLICITACOES = ['Cesta básica', 'Água potável', 'Colchão', 'Geladeira', 'Itens necessários', 'Kit de higiene', 'Auxílio aluguel (abrigo temporário)',
@@ -205,6 +214,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
   const [membros, setMembros] = useState<Membro[]>([])
   const [entregas, setEntregas] = useState<Entrega[]>([])
   const [encs, setEncs] = useState<Encaminhamento[]>([])
+  const [grupos, setGrupos] = useState<Grupo[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -219,17 +229,19 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
   const [fMembros, setFMembros] = useState<Linha<Membro>[]>([])
   const [fEntregas, setFEntregas] = useState<Linha<Entrega>[]>([])
   const [fEncs, setFEncs] = useState<Linha<Encaminhamento>[]>([])
+  const [fGrupos, setFGrupos] = useState<Linha<Grupo>[]>([])
 
   const carregar = useCallback(async () => {
     setLoading(true)
-    const [a, m, e, n] = await Promise.all([
+    const [a, m, e, n, g] = await Promise.all([
       lerTudo<Atendimento>('atendimentos', 'criado_em', false),
       lerTudo<Membro>('atendimento_membros', 'id', true),
       lerTudo<Entrega>('atendimento_entregas', 'id', true),
       lerTudo<Encaminhamento>('atendimento_encaminhamentos', 'id', true),
+      lerTudo<Grupo>('atendimento_grupos', 'id', true),
     ])
-    setErro(a.erro || m.erro || e.erro || n.erro)
-    setLista(a.dados); setMembros(m.dados); setEntregas(e.dados); setEncs(n.dados)
+    setErro(a.erro || m.erro || e.erro || n.erro || g.erro)
+    setLista(a.dados); setMembros(m.dados); setEntregas(e.dados); setEncs(n.dados); setGrupos(g.dados)
     setLoading(false)
   }, [])
 
@@ -280,7 +292,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
 
   const abrirNovo = () => {
     setFicha({ situacao: 'em_atendimento', danos: [], solicitacoes: [], tipificacao: [], necessidades_basicas: [], abrigo: [], tem_idoso: false, tem_gestante_lactante: false, tem_pcd: false })
-    setFMembros([]); setFEntregas([]); setFEncs([])
+    setFMembros([]); setFEntregas([]); setFEncs([]); setFGrupos([])
     setAberto(true)
   }
   const abrirEditar = (a: Atendimento) => {
@@ -288,6 +300,13 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
     setFMembros(membros.filter(m => m.atendimento_id === a.id).map(nova))
     setFEntregas(entregas.filter(e => e.atendimento_id === a.id).map(nova))
     setFEncs(encs.filter(e => e.atendimento_id === a.id).map(nova))
+    // fichas antigas só tinham as caixinhas: vira uma linha em branco do mesmo tipo, para a informação não se perder ao salvar
+    const doAtendimento = grupos.filter(g => g.atendimento_id === a.id)
+    const extras: Grupo[] = []
+    if (a.tem_idoso && !doAtendimento.some(g => g.tipo === 'idoso')) extras.push({ tipo: 'idoso', nome: null, detalhe: null })
+    if (a.tem_gestante_lactante && !doAtendimento.some(g => g.tipo === 'gestante' || g.tipo === 'lactante')) extras.push({ tipo: 'gestante', nome: null, detalhe: null })
+    if (a.tem_pcd && !doAtendimento.some(g => g.tipo === 'pcd')) extras.push({ tipo: 'pcd', nome: null, detalhe: null })
+    setFGrupos([...doAtendimento, ...extras].map(nova))
     setAberto(true)
   }
 
@@ -344,7 +363,9 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
         resp_nome: (ficha.resp_nome || '').trim(),
         resp_cpf: vazioNull(ficha.resp_cpf), resp_rg: vazioNull(ficha.resp_rg), resp_telefone: vazioNull(ficha.resp_telefone),
         endereco: vazioNull(ficha.endereco), ponto_referencia: vazioNull(ficha.ponto_referencia), bairro_comunidade: vazioNull(ficha.bairro_comunidade),
-        tem_idoso: !!ficha.tem_idoso, tem_gestante_lactante: !!ficha.tem_gestante_lactante, tem_pcd: !!ficha.tem_pcd,
+        tem_idoso: fGrupos.some(g => g.tipo === 'idoso'),
+        tem_gestante_lactante: fGrupos.some(g => g.tipo === 'gestante' || g.tipo === 'lactante'),
+        tem_pcd: fGrupos.some(g => g.tipo === 'pcd'),
         danos: ficha.danos || [], solicitacoes: ficha.solicitacoes || [],
         comodos: ficha.comodos === null || ficha.comodos === undefined || (ficha.comodos as unknown) === '' ? null : Number(ficha.comodos),
         energia: vazioNull(ficha.energia), agua: vazioNull(ficha.agua), saneamento: vazioNull(ficha.saneamento),
@@ -383,6 +404,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
       const origM = membros.filter(m => m.atendimento_id === idFinal)
       const origE = entregas.filter(e => e.atendimento_id === idFinal)
       const origN = encs.filter(e => e.atendimento_id === idFinal)
+      const origG = grupos.filter(g => g.atendimento_id === idFinal)
       await sincronizar<Membro>('atendimento_membros', fMembros, origM, idFinal, m => ({
         nome: m.nome.trim(), parentesco: vazioNull(m.parentesco), nascimento: m.nascimento || null,
         cpf: vazioNull(m.cpf), rg: vazioNull(m.rg), telefone: vazioNull(m.telefone),
@@ -395,6 +417,9 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
       }))
       await sincronizar<Encaminhamento>('atendimento_encaminhamentos', fEncs, origN, idFinal, e => ({
         orgao: e.orgao.trim(), tipo: e.tipo, data_encaminhamento: e.data_encaminhamento || null, obs: vazioNull(e.obs),
+      }))
+      await sincronizar<Grupo>('atendimento_grupos', fGrupos, origG, idFinal, g => ({
+        tipo: g.tipo, nome: vazioNull(g.nome), detalhe: vazioNull(g.detalhe),
       }))
       setAberto(false)
       await carregar()
@@ -563,14 +588,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
               <datalist id="dl-civil">{ESTADOS_CIVIS.map(o => <option key={o} value={o} />)}</datalist>
               <datalist id="dl-escola">{ESCOLARIDADES.map(o => <option key={o} value={o} />)}</datalist>
               <datalist id="dl-genero">{GENEROS.map(o => <option key={o} value={o} />)}</datalist>
-
-              <div className="flex gap-6 flex-wrap bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
-                {([['tem_idoso', 'Há idoso na residência'], ['tem_gestante_lactante', 'Há gestante ou lactante'], ['tem_pcd', 'Há pessoa com deficiência']] as const).map(([campo, rot]) => (
-                  <label key={campo} className="flex items-center gap-2 text-sm font-bold cursor-pointer">
-                    <input type="checkbox" checked={!!ficha[campo]} onChange={e => set(campo, e.target.checked)} /> {rot}
-                  </label>
-                ))}
-              </div>
+              <datalist id="dl-nucleo">{[ficha.resp_nome || '', ...fMembros.map(m => m.nome)].filter(n => n.trim()).map(n => <option key={n} value={n} />)}</datalist>
 
               <Secao titulo="Responsável familiar">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -667,6 +685,33 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                         {!somenteLeitura && (
                           <button type="button" onClick={() => setFMembros(l => l.filter(x => x._k !== m._k))}
                             className="mt-2 text-xs text-error-expired flex items-center gap-1"><Trash2 size={12} /> Tirar da lista</button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </Secao>
+
+              <Secao titulo={`Grupos prioritários (${fGrupos.length})`} acao={!somenteLeitura && (
+                <button type="button" onClick={() => setFGrupos(l => [...l, nova<Grupo>({ tipo: 'idoso', nome: null, detalhe: null })])}
+                  className="text-xs font-bold text-primary-btn flex items-center gap-1"><Plus size={13} /> Adicionar</button>)}>
+                <p className="text-xs text-text-secondary mb-2">Idoso, gestante, lactante ou pessoa com deficiência na residência. Preencha o que der na hora; nome e detalhe podem ficar em branco.</p>
+                {fGrupos.length === 0 && <p className="text-text-secondary text-sm italic">Nenhum.</p>}
+                <div className="space-y-2">
+                  {fGrupos.map(g => {
+                    const up = <K extends keyof Grupo>(k: K, v: Grupo[K]) => setFGrupos(l => l.map(x => x._k === g._k ? { ...x, [k]: v } : x))
+                    return (
+                      <div key={g._k} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-end border border-gray-100 bg-surface-card rounded-lg p-3">
+                        <div className="md:col-span-3"><Rotulo>Tipo</Rotulo>
+                          <select className={classeInput} value={g.tipo} onChange={ev => up('tipo', ev.target.value as Grupo['tipo'])}>
+                            {TIPOS_GRUPO.map(([v, rot]) => <option key={v} value={v}>{rot}</option>)}
+                          </select></div>
+                        <div className="md:col-span-4"><Rotulo>Nome</Rotulo><input className={classeInput} list="dl-nucleo" value={g.nome || ''} onChange={ev => up('nome', ev.target.value || null)} /></div>
+                        <div className="col-span-2 md:col-span-4"><Rotulo>Detalhe</Rotulo>
+                          <input className={classeInput} placeholder="Ex.: mulher, 72 anos · 7 meses · criança, deficiência visual" value={g.detalhe || ''} onChange={ev => up('detalhe', ev.target.value || null)} /></div>
+                        {!somenteLeitura && (
+                          <button type="button" onClick={() => setFGrupos(l => l.filter(x => x._k !== g._k))} title="Tirar da lista"
+                            className="md:col-span-1 pb-2 text-error-expired"><Trash2 size={15} /></button>
                         )}
                       </div>
                     )
@@ -818,7 +863,8 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
         <RelatorioSocialModal atendimento={relatorioDe} onClose={() => setRelatorioDe(null)}
           membros={membros.filter(m => m.atendimento_id === relatorioDe.id)}
           entregas={entregas.filter(e => e.atendimento_id === relatorioDe.id)}
-          encs={encs.filter(e => e.atendimento_id === relatorioDe.id)} />
+          encs={encs.filter(e => e.atendimento_id === relatorioDe.id)}
+          grupos={grupos.filter(g => g.atendimento_id === relatorioDe.id)} />
       )}
     </div>
   )
