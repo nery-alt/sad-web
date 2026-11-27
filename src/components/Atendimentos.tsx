@@ -107,7 +107,8 @@ const PROPRIEDADES: [string, string][] = [['propria', 'Própria'], ['cedida', 'C
 const NECESSIDADES: [string, string][] = [['alimentacao', 'Alimentação'], ['saude', 'Saúde']]
 const ABRIGOS: [string, string][] = [['desabrigados', 'Desabrigados'], ['desalojados', 'Desalojados']]
 const DANOS = ['Perda total', 'Perda parcial', 'Danos em móveis ou eletrodomésticos', 'Perda de documentos']
-const SOLICITACOES = ['Cesta básica', 'Água potável', 'Colchão', 'Geladeira', 'Itens necessários', 'Kit de higiene', 'Auxílio aluguel (abrigo temporário)']
+const SOLICITACOES = ['Cesta básica', 'Água potável', 'Colchão', 'Geladeira', 'Itens necessários', 'Kit de higiene', 'Auxílio aluguel (abrigo temporário)',
+  'Auxílio passagem (transporte)', 'Auxílio documentação civil', 'Auxílio para aquisição de medicamento (quando previsto)', 'Auxílio enxoval']
 const PARENTESCOS = ['Esposo', 'Esposa', 'Filho', 'Filha', 'Pai', 'Mãe', 'Avô', 'Avó', 'Irmão', 'Irmã', 'Neto', 'Neta', 'Outro']
 const ESTADOS_CIVIS = ['Solteiro(a)', 'Casado(a)', 'União estável', 'Divorciado(a)', 'Viúvo(a)']
 const ESCOLARIDADES = ['Sem escolaridade', 'Fundamental incompleto', 'Fundamental completo', 'Médio incompleto', 'Médio completo', 'Superior incompleto', 'Superior completo']
