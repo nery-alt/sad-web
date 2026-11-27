@@ -85,6 +85,28 @@ const minuscula = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
 const reais = (n: number) => 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`
 
+// Compara textos sem acento, caixa ou pontuação (para não repetir "Comunidade X" duas vezes)
+const sem = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const contem = (todo: string, parte: string) => !!sem(parte) && sem(todo).includes(sem(parte))
+// endereço e bairro/comunidade, sem repetir um dentro do outro
+function partesLocal(a: AtendimentoSocial): string[] {
+  const p: string[] = []
+  for (const t of [a.endereco, a.bairro_comunidade]) {
+    const v = (t || '').trim()
+    if (v && !p.some(x => contem(x, v))) p.push(v)
+  }
+  return p
+}
+// "ao CRAS", "à SEMASC"
+const FEMININOS = /^(semasc|semsa|semiu|semmalp|apae|defensoria|policia|secretaria|prefeitura|procuradoria|delegacia|ouvidoria)\b/
+const artigo = (o: string) => FEMININOS.test(sem(o)) ? 'à' : 'ao'
+// "sim"/"não" digitados na ficha viram verdadeiro/falso; outro texto fica como veio
+const simNao = (v: string | null): boolean | string | null => {
+  const t = (v || '').trim()
+  return !t ? null : /^n[aã]o\b/i.test(t) ? false : /^sim\b/i.test(t) ? true : t
+}
+const AUXILIO = /^aux[ií]lio/i
+
 const TIPIF: Record<string, string> = { deslizamento: 'deslizamento', tempestade: 'tempestade', incendio: 'incêndio', alagamento: 'alagamento' }
 const RESID: Record<string, string> = { alvenaria: 'alvenaria', madeira: 'madeira', misto: 'material misto (alvenaria e madeira)', barro: 'barro' }
 const PROP: Record<string, string> = { propria: 'de propriedade da família', cedida: 'cedido', alugada: 'alugado' }
@@ -94,7 +116,7 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
   // 1. Identificação da ocorrência
   const tip = (a.tipificacao || []).map(t => t === 'outros' ? (a.tipificacao_outros || '').trim() : TIPIF[t]).filter(Boolean)
   const fato = tip.length ? lista(tip) : (a.evento || '').trim() ? minuscula(a.evento.trim()) : faltou('informar o evento')
-  const local = [a.endereco, a.bairro_comunidade].filter(Boolean).join(', ')
+  const local = partesLocal(a).join(', ')
   const zona = a.area_afetada === 'urbana' ? 'zona urbana' : a.area_afetada === 'rural' ? 'zona rural' : ''
   const quando = a.data_ocorrencia
     ? `ocorrido no dia ${dataExtenso(a.data_ocorrencia)}${a.hora_ocorrencia ? `, por volta das ${a.hora_ocorrencia.slice(0, 5).replace(':', 'h')}min` : ''}`
@@ -106,8 +128,10 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
   if (a.tipo_imovel || tipoRes || a.propriedade || a.comodos) {
     casa.push(`O imóvel é ${a.tipo_imovel === 'comercial' ? 'comercial' : 'residencial'}${tipoRes ? `, construído em ${tipoRes}` : ''}${a.propriedade ? `, ${PROP[a.propriedade]}` : ''}${a.comodos ? `, com ${plural(a.comodos, 'cômodo', 'cômodos')}` : ''}.`)
   }
-  if (a.ponto_referencia) casa.push(`Ponto de referência: ${a.ponto_referencia}.`)
-  const s1 = [intro, ...casa, faltou('descrever o que foi observado no local durante a visita')]
+  if (a.ponto_referencia && !contem(local, a.ponto_referencia)) casa.push(`Ponto de referência: ${a.ponto_referencia.trim()}.`)
+  // o que a equipe anotou nas observações da ficha (estado da casa etc.) é o que foi observado no local
+  const observado = (a.observacoes || '').trim()
+  const s1 = [intro, ...casa, observado || faltou('descrever o que foi observado no local durante a visita')]
 
   // 2. Descrição da situação
   const s2: string[] = []
@@ -123,14 +147,24 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
 
   // 3. Condições socioeconômicas
   const s3: string[] = []
-  s3.push(a.renda_familiar ? `Durante a avaliação social, constatou-se que a família possui renda mensal aproximada de ${reais(Number(a.renda_familiar))}${faltou(', informar a origem da renda')}.` : `Renda familiar: ${faltou('informar valor e origem da renda')}.`)
+  s3.push(a.renda_familiar ? `Durante a avaliação social, constatou-se que a família possui renda mensal aproximada de ${reais(Number(a.renda_familiar))}, proveniente de ${faltou('informar a origem da renda')}.` : `Renda familiar: ${faltou('informar valor e origem da renda')}.`)
   const nucleo = membros.length + 1
   s3.push(`O núcleo familiar é composto por ${plural(nucleo, 'pessoa', 'pessoas')}.`)
-  const infra = [a.energia ? `energia elétrica: ${a.energia}` : '', a.agua ? `abastecimento de água: ${a.agua}` : '', a.saneamento ? `saneamento básico: ${a.saneamento}` : ''].filter(Boolean)
-  if (infra.length) s3.push(`Quanto à infraestrutura, a residência apresenta ${infra.join('; ')}.`)
+  const pos: string[] = [], neg: string[] = [], outros: string[] = []
+  for (const [nome, v] of [['energia elétrica', a.energia], ['abastecimento de água', a.agua], ['saneamento básico', a.saneamento]] as const) {
+    const r = simNao(v)
+    if (r === true) pos.push(nome)
+    else if (r === false) neg.push(nome)
+    else if (r) outros.push(`apresenta ${nome}: ${r}`)
+  }
+  const nem = (xs: string[]) => xs.length <= 1 ? (xs[0] || '') : `${xs.slice(0, -1).join(', ')} nem ${xs[xs.length - 1]}`
+  const infra = [
+    [pos.length ? `possui ${lista(pos)}` : '', neg.length ? `não possui ${nem(neg)}` : ''].filter(Boolean).join(', mas '),
+    ...outros,
+  ].filter(Boolean)
+  if (infra.length) s3.push(`Quanto à infraestrutura, a residência ${infra.join('; ')}.`)
   const grupos = [a.tem_idoso ? 'idoso' : '', a.tem_gestante_lactante ? 'gestante ou lactante' : '', a.tem_pcd ? 'pessoa com deficiência' : ''].filter(Boolean)
   if (grupos.length) s3.push(`Há na residência: ${lista(grupos)}.`)
-  if (a.observacoes) s3.push(a.observacoes.trim())
 
   // 4. Análise social e vulnerabilidades
   const s4: string[] = []
@@ -144,14 +178,19 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
   const s5: string[] = []
   const sol = a.solicitacoes || []
   const aluguel = sol.find(x => /aluguel/i.test(x))
-  const outras = sol.filter(x => !/aluguel/i.test(x)).map(minuscula)
+  const auxilios = sol.filter(x => !/aluguel/i.test(x) && AUXILIO.test(x.trim())).map(minuscula)
+  const outras = sol.filter(x => !/aluguel/i.test(x) && !AUXILIO.test(x.trim())).map(minuscula)
   if (aluguel) s5.push('Recomenda-se a inclusão prioritária da família em programa de Aluguel Social, garantindo moradia provisória digna até a recuperação ou reconstrução da residência.')
+  if (auxilios.length) s5.push(`Solicita-se a concessão ${auxilios.length === 1 ? 'do benefício eventual' : 'dos benefícios eventuais'}: ${lista(auxilios)}.`)
   if (outras.length) s5.push(`Solicita-se o atendimento emergencial com: ${lista(outras)}.`)
   if ((a.material_solicitado || '').trim()) s5.push(`Material solicitado: ${a.material_solicitado!.trim()}.`)
   if (entregas.length) s5.push(`Já foram realizadas as seguintes entregas: ${entregas.map(e => `${e.item} (${e.quantidade})${e.data_entrega ? ` em ${dataCurta(e.data_entrega)}` : ''}`).join('; ')}.`)
   const orgaos = [...new Set(encs.map(e => e.orgao.trim()).filter(Boolean))]
-  for (const e of encs.filter(x => x.obs)) s5.push(`Encaminhamento ao ${e.orgao}: ${e.obs}`)
-  s5.push(`Este relatório é encaminhado, em caráter de urgência, ${orgaos.length ? `ao(à) ${lista(orgaos)}` : faltou('informar os órgãos: CRAS, SEMASC, SEMIU…')}, para ciência e adoção das providências cabíveis, em conformidade com a Lei nº 12.608/2012 e demais normativas aplicáveis à proteção e defesa dos cidadãos atingidos por desastres.`)
+  for (const e of encs.filter(x => (x.obs || '').trim())) {
+    const o = e.orgao.trim(), ob = (e.obs || '').trim().replace(/\.$/, '')
+    s5.push(sem(ob).startsWith(sem(o)) ? `Encaminhamento ${artigo(o)} ${ob}.` : `Encaminhamento ${artigo(o)} ${o}: ${ob}.`)
+  }
+  s5.push(`Este relatório é encaminhado, em caráter de urgência, ${orgaos.length ? lista(orgaos.map(o => `${artigo(o)} ${o}`)) : faltou('informar os órgãos: CRAS, SEMASC, SEMIU…')}, para ciência e adoção das providências cabíveis, em conformidade com a Lei nº 12.608/2012 e demais normativas aplicáveis à proteção e defesa dos cidadãos atingidos por desastres.`)
 
   return [
     { titulo: 'Identificação da Ocorrência', texto: s1.join('\n') },
@@ -162,16 +201,24 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
   ]
 }
 
+// A linha do endereço corre ao lado do quadro do VISTO: passando de ~50 caracteres entra por baixo dele.
+// Quebra em várias linhas (a primeira leva o rótulo em negrito).
+function enderecoEmLinhas(endereco: string): string[] {
+  if (!endereco) return [`**Endereço:** ${faltou('endereço')}.`]
+  const [primeira, ...resto] = quebrarTopo('Endereço: ', endereco + '.')
+  return [`**Endereço:** ${primeira}`, ...resto]
+}
+
 // Linhas da primeira página (missão, data, equipe e identificação da família). "" = linha em branco.
 export function montarIdentificacao(a: AtendimentoSocial, membros: MembroSocial[], opc: { hora: string; equipe: Servidor[]; dataVisita: string | null }): string[] {
-  const endereco = [a.endereco, a.bairro_comunidade].filter(Boolean).join(' – ')
+  const endereco = partesLocal(a).join(' – ')
   const nomesEquipe = opc.equipe.map(s => s.id === 'barbara' ? `Assistente Social ${s.nome}` : `Auxiliar de Serviço Social ${s.nome}`)
   const equipe = `A equipe técnica de Assistência Social da Secretaria Municipal de Defesa Civil e Patrimonial – SEMDCEP, composta por ${lista([...nomesEquipe, 'agentes da Defesa Civil'])}, estiveram no local realizando a visita domiciliar.`
   const L: string[] = [
     '**Missão:** Visitas da Equipe de Assistência Social na residência.',
     `**Data:** ${dataExtenso(opc.dataVisita) || faltou('data da visita')}.`,
     `**Hora:** ${opc.hora || faltou('hora da visita')}.`,
-    `**Endereço:** ${endereco || faltou('endereço')}.`,
+    ...enderecoEmLinhas(endereco),
     '',
     '**EQUIPE DE ASSISTÊNCIA:**',
     equipe,
