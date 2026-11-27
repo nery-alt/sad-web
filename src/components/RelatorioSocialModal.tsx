@@ -3,7 +3,7 @@ import { X, FileDown, ImagePlus, Trash2 } from 'lucide-react'
 import { recortarFoto, reduzirFoto } from '../lib/laudoAlvara'
 import {
   VISTOS, SIGNATARIOS_SOCIAL, montarRascunho, montarIdentificacao, gerarRelatorioSocial, nomeArquivoRelatorioSocial,
-  type AtendimentoSocial, type MembroSocial, type EntregaSocial, type EncaminhamentoSocial, type SecaoSocial,
+  type AtendimentoSocial, type MembroSocial, type EntregaSocial, type EncaminhamentoSocial, type GrupoSocial, type SecaoSocial,
 } from '../lib/relatorioSocial'
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
   membros: MembroSocial[]
   entregas: EntregaSocial[]
   encs: EncaminhamentoSocial[]
+  grupos: GrupoSocial[]
   onClose: () => void
 }
 
@@ -28,13 +29,13 @@ const ajeitarLegenda = (t: string) => {
 }
 let seqFoto = 0
 
-export const RelatorioSocialModal: React.FC<Props> = ({ atendimento: a, membros, entregas, encs, onClose }) => {
+export const RelatorioSocialModal: React.FC<Props> = ({ atendimento: a, membros, entregas, encs, grupos, onClose }) => {
   const [numero, setNumero] = useState('')
   const [hora, setHora] = useState('')
   const [dataEmissao, setDataEmissao] = useState(hojeISO())
   const [vistoId, setVistoId] = useState(VISTOS[1].id)               // Adjunto como padrão (assinou os últimos)
   const [assinam, setAssinam] = useState<string[]>(['barbara'])
-  const [secoes, setSecoes] = useState<SecaoSocial[]>(() => montarRascunho(a, membros, entregas, encs))
+  const [secoes, setSecoes] = useState<SecaoSocial[]>(() => montarRascunho(a, membros, entregas, encs, grupos))
   const [fotos, setFotos] = useState<FotoLocal[]>([])
   const [gerando, setGerando] = useState(false)
   const arquivoRef = useRef<HTMLInputElement>(null)
@@ -110,13 +111,6 @@ export const RelatorioSocialModal: React.FC<Props> = ({ atendimento: a, membros,
             O texto abaixo é um rascunho montado com os dados da ficha. Ajuste o que quiser aqui ou no Word depois.
             O que estiver entre <b>[[ ]]</b> sai marcado de <span className="bg-yellow-200 px-1">amarelo</span> no Word, para você completar.
           </p>
-
-          {!!a.pessoas_afetadas && a.pessoas_afetadas !== membros.length + 1 && (
-            <p className="text-sm bg-yellow-50 border border-yellow-200 rounded p-2 text-yellow-800">
-              Atenção: a ficha informa {a.pessoas_afetadas} pessoa(s) afetada(s), mas o núcleo familiar tem {membros.length + 1} cadastrada(s)
-              (contando o responsável). Corrija na ficha ou ajuste o texto abaixo.
-            </p>
-          )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div><label className={lbl}>Nº do relatório</label>
