@@ -68,6 +68,7 @@ export interface AtendimentoSocial {
 }
 export interface MembroSocial { nome: string; parentesco: string | null; nascimento: string | null; cpf: string | null; rg: string | null }
 export interface EntregaSocial { item: string; quantidade: number; data_entrega: string | null }
+export interface GrupoSocial { tipo: string; nome: string | null; detalhe: string | null }   // idoso | gestante | lactante | pcd
 export interface EncaminhamentoSocial { orgao: string; tipo: 'emergencial' | 'permanente'; obs: string | null }
 
 export interface SecaoSocial { titulo: string; texto: string }   // texto: um parágrafo por linha; "• " abre marcador
@@ -112,7 +113,7 @@ const RESID: Record<string, string> = { alvenaria: 'alvenaria', madeira: 'madeir
 const PROP: Record<string, string> = { propria: 'de propriedade da família', cedida: 'cedido', alugada: 'alugado' }
 
 // ---------- Rascunho ----------
-export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], entregas: EntregaSocial[], encs: EncaminhamentoSocial[]): SecaoSocial[] {
+export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], entregas: EntregaSocial[], encs: EncaminhamentoSocial[], grupos: GrupoSocial[] = []): SecaoSocial[] {
   // 1. Identificação da ocorrência
   const tip = (a.tipificacao || []).map(t => t === 'outros' ? (a.tipificacao_outros || '').trim() : TIPIF[t]).filter(Boolean)
   const fato = tip.length ? lista(tip) : (a.evento || '').trim() ? minuscula(a.evento.trim()) : faltou('informar o evento')
@@ -148,7 +149,8 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
   // 3. Condições socioeconômicas
   const s3: string[] = []
   s3.push(a.renda_familiar ? `Durante a avaliação social, constatou-se que a família possui renda mensal aproximada de ${reais(Number(a.renda_familiar))}, proveniente de ${faltou('informar a origem da renda')}.` : `Renda familiar: ${faltou('informar valor e origem da renda')}.`)
-  const nucleo = membros.length + 1
+  // nem sempre dá para cadastrar todos no local: vale o maior entre as pessoas afetadas informadas e as cadastradas
+  const nucleo = Math.max(Number(a.pessoas_afetadas) || 0, membros.length + 1)
   s3.push(`O núcleo familiar é composto por ${plural(nucleo, 'pessoa', 'pessoas')}.`)
   const pos: string[] = [], neg: string[] = [], outros: string[] = []
   for (const [nome, v] of [['energia elétrica', a.energia], ['abastecimento de água', a.agua], ['saneamento básico', a.saneamento]] as const) {
@@ -163,8 +165,15 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
     ...outros,
   ].filter(Boolean)
   if (infra.length) s3.push(`Quanto à infraestrutura, a residência ${infra.join('; ')}.`)
-  const grupos = [a.tem_idoso ? 'idoso' : '', a.tem_gestante_lactante ? 'gestante ou lactante' : '', a.tem_pcd ? 'pessoa com deficiência' : ''].filter(Boolean)
-  if (grupos.length) s3.push(`Há na residência: ${lista(grupos)}.`)
+  const ROTULO_GRUPO: Record<string, string> = { idoso: 'idoso', gestante: 'gestante', lactante: 'lactante', pcd: 'pessoa com deficiência' }
+  const prioritarios = grupos.map(g => {
+    const nome = (g.nome || '').trim(), det = (g.detalhe || '').trim()
+    return `${ROTULO_GRUPO[g.tipo] || g.tipo}${nome ? ' ' + nome.toUpperCase() : ''}${det ? ` (${det})` : ''}`
+  })
+  // fichas antigas só têm as marcações simples
+  const marcas = [a.tem_idoso ? 'idoso' : '', a.tem_gestante_lactante ? 'gestante ou lactante' : '', a.tem_pcd ? 'pessoa com deficiência' : ''].filter(Boolean)
+  if (prioritarios.length) s3.push(`Há na residência: ${lista(prioritarios)}.`)
+  else if (marcas.length) s3.push(`Há na residência: ${lista(marcas)}.`)
 
   // 4. Análise social e vulnerabilidades
   const s4: string[] = []
