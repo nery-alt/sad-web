@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { HeartHandshake, Plus, Search, Printer, Pencil, Trash2, X, Save, FileText } from 'lucide-react'
+import { HeartHandshake, Plus, Search, Printer, Pencil, Trash2, X, Save, FileText, FileSignature, ClipboardList } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { norm } from '../lib/texto'
 import { COBRADES, nomeCobrade } from '../lib/cobrade'
 import { RelatorioSocialModal } from './RelatorioSocialModal'
+import { TermoDoacaoModal } from './TermoDoacaoModal'
+import { RelacaoItensModal } from './RelacaoItensModal'
 
 type Situacao = 'em_atendimento' | 'acompanhamento' | 'encerrado'
 
@@ -224,6 +226,8 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
 
   const [aberto, setAberto] = useState(false)
   const [relatorioDe, setRelatorioDe] = useState<Atendimento | null>(null)
+  const [termoDe, setTermoDe] = useState<Atendimento | null>(null)
+  const [relacaoAberta, setRelacaoAberta] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [ficha, setFicha] = useState<Partial<Atendimento>>({})
   const [fMembros, setFMembros] = useState<Linha<Membro>[]>([])
@@ -261,20 +265,27 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
   // Contagens da tela
   const resumo = useMemo(() => {
     const porSit = { em_atendimento: 0, acompanhamento: 0, encerrado: 0 } as Record<Situacao, number>
-    let semVisita = 0, comEntrega = 0
+    let semVisita = 0, comEntrega = 0, comPendente = 0
     for (const a of lista) {
       porSit[a.situacao]++
       if (!a.data_visita) semVisita++
-      if ((entregasDe.get(a.id) || []).length > 0) comEntrega++
+      const es = entregasDe.get(a.id) || []
+      if (es.some(e => e.data_entrega)) comEntrega++
+      if (es.some(e => !e.data_entrega)) comPendente++
     }
-    const itens = new Map<string, { nome: string; qtd: number }>()
-    for (const e of entregas) {
-      const k = norm(e.item)
-      const atual = itens.get(k) || { nome: e.item, qtd: 0 }
-      atual.qtd += Number(e.quantidade) || 0
-      itens.set(k, atual)
+    // item com data de entrega = entregue; sem data = pendente
+    const somar = (entregue: boolean) => {
+      const itens = new Map<string, { nome: string; qtd: number }>()
+      for (const e of entregas) {
+        if (!!e.data_entrega !== entregue) continue
+        const k = norm(e.item)
+        const atual = itens.get(k) || { nome: e.item, qtd: 0 }
+        atual.qtd += Number(e.quantidade) || 0
+        itens.set(k, atual)
+      }
+      return [...itens.values()].sort((x, y) => y.qtd - x.qtd)
     }
-    return { porSit, semVisita, comEntrega, itens: [...itens.values()].sort((x, y) => y.qtd - x.qtd) }
+    return { porSit, semVisita, comEntrega, comPendente, itens: somar(true), pendentes: somar(false) }
   }, [lista, entregas, entregasDe])
 
   const filtrados = useMemo(() => {
@@ -348,8 +359,8 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
       if (v !== null && v !== undefined && !(Number(v) >= 0)) { alert(`${rot}: informe um número igual ou maior que zero.`); return }
     }
     if (fMembros.some(m => !m.nome.trim())) { alert('Há uma pessoa do núcleo familiar sem nome.'); return }
-    if (fEntregas.some(e => !e.item.trim())) { alert('Há uma entrega sem o item preenchido.'); return }
-    if (fEntregas.some(e => !(Number(e.quantidade) > 0))) { alert('A quantidade de cada entrega precisa ser maior que zero.'); return }
+    if (fEntregas.some(e => !e.item.trim())) { alert('Há um item sem o nome preenchido.'); return }
+    if (fEntregas.some(e => !(Number(e.quantidade) > 0))) { alert('A quantidade de cada item precisa ser maior que zero.'); return }
     if (fEncs.some(e => !e.orgao.trim())) { alert('Há um encaminhamento sem o órgão preenchido.'); return }
     setSalvando(true)
     try {
@@ -445,7 +456,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
     const hoje = new Date().toLocaleString('pt-BR')
     const filtros = [filtroEvento && `Evento: ${filtroEvento}`, filtroSituacao && `Situação: ${SITUACAO_LABEL[filtroSituacao as Situacao]}`, busca && `Busca: ${busca}`].filter(Boolean).join(' · ') || 'Sem filtros'
     const linhas = filtrados.map((a, i) => {
-      const ents = (entregasDe.get(a.id) || []).map(e => `${esc(e.item)}: ${esc(e.quantidade)}`).join('; ') || '—'
+      const ents = (entregasDe.get(a.id) || []).map(e => `${esc(e.item)}: ${esc(e.quantidade)}${e.data_entrega ? '' : ' (pendente)'}`).join('; ') || '—'
       return `<tr><td>${i + 1}</td><td>${esc(a.protocolo || '—')}</td><td><b>${esc(a.resp_nome)}</b><br>${esc(a.resp_cpf || '')}</td>
         <td>${esc(a.endereco || '')}${a.bairro_comunidade ? '<br>' + esc(a.bairro_comunidade) : ''}</td><td>${esc(a.resp_telefone || '')}</td>
         <td>${esc(a.evento)}</td><td>${esc(SITUACAO_LABEL[a.situacao])}</td><td>${esc(dataBR(a.data_visita))}</td>
@@ -458,7 +469,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
       <h1>RELAÇÃO DE ATENDIMENTOS — ASSISTÊNCIA SOCIAL</h1>
       <p>Secretaria Municipal de Defesa Civil e Patrimonial — SEMDCEP · Tefé/AM</p>
       <p>${esc(filtros)} · ${filtrados.length} atendimento(s) · Emitido em ${esc(hoje)}</p>
-      <table><tr><th>Nº</th><th>Processo</th><th>Responsável / CPF</th><th>Endereço</th><th>Contato</th><th>Evento</th><th>Situação</th><th>Visita</th><th>Membros</th><th>Entregas</th></tr>${linhas}</table>
+      <table><tr><th>Nº</th><th>Processo</th><th>Responsável / CPF</th><th>Endereço</th><th>Contato</th><th>Evento</th><th>Situação</th><th>Visita</th><th>Membros</th><th>Itens</th></tr>${linhas}</table>
       </body></html>`
     const w = window.open('', '_blank')
     if (!w) return
@@ -478,12 +489,16 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
       <div className="flex justify-between items-center mb-3 shrink-0 flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2"><HeartHandshake size={24} /> Atendimentos</h1>
-          <p className="text-text-secondary text-sm">Uma família atendida em um evento: visita, núcleo familiar, entregas e encaminhamentos.</p>
+          <p className="text-text-secondary text-sm">Uma família atendida: visita, núcleo familiar, itens pedidos e entregues e encaminhamentos.</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => setRelacaoAberta(true)} disabled={filtrados.length === 0}
+            className="flex items-center gap-2 border border-gray-300 text-text-secondary px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-40">
+            <ClipboardList size={15} /> Relação de itens
+          </button>
           <button onClick={imprimirRelacao} disabled={filtrados.length === 0}
             className="flex items-center gap-2 border border-gray-300 text-text-secondary px-3 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-40">
-            <Printer size={15} /> Relação (PDF)
+            <Printer size={15} /> Relação de famílias (PDF)
           </button>
           {!somenteLeitura && (
             <button onClick={abrirNovo} className="flex items-center gap-2 bg-primary-btn text-white px-4 py-2 rounded-lg font-bold hover:opacity-90 text-sm">
@@ -500,12 +515,21 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
         {cartao('Encerrados', resumo.porSit.encerrado)}
         {cartao('Sem visita', resumo.semVisita)}
         {cartao('Com entrega', resumo.comEntrega)}
+        {cartao('Com item pendente', resumo.comPendente)}
       </div>
       {resumo.itens.length > 0 && (
         <div className="flex gap-2 flex-wrap mb-3 shrink-0 text-xs">
           <span className="text-text-secondary uppercase font-bold self-center">Entregue no total:</span>
           {resumo.itens.map(i => (
             <span key={i.nome} className="bg-surface-card border border-gray-200 rounded-full px-3 py-1"><b>{i.qtd}</b> {i.nome}</span>
+          ))}
+        </div>
+      )}
+      {resumo.pendentes.length > 0 && (
+        <div className="flex gap-2 flex-wrap mb-3 shrink-0 text-xs">
+          <span className="text-text-secondary uppercase font-bold self-center">Pendente no total:</span>
+          {resumo.pendentes.map(i => (
+            <span key={i.nome} className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-full px-3 py-1"><b>{i.qtd}</b> {i.nome}</span>
           ))}
         </div>
       )}
@@ -554,11 +578,14 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                   {[a.endereco, a.bairro_comunidade, a.resp_telefone].filter(Boolean).join(' · ') || 'sem endereço'}
                 </div>
                 <div className="text-xs mt-1">
-                  {ents.length === 0 ? <span className="text-text-secondary italic">Nenhuma entrega registrada</span>
-                    : ents.map(e => `${e.item}: ${e.quantidade}`).join(' · ')}
+                  {ents.length === 0 ? <span className="text-text-secondary italic">Nenhum item registrado</span> : (<>
+                    {ents.some(e => e.data_entrega) && <span>Entregue: {ents.filter(e => e.data_entrega).map(e => `${e.item}: ${e.quantidade}`).join(' · ')}</span>}
+                    {ents.some(e => !e.data_entrega) && <span className="text-yellow-700 ml-3">Pendente: {ents.filter(e => !e.data_entrega).map(e => `${e.item}: ${e.quantidade}`).join(' · ')}</span>}
+                  </>)}
                 </div>
               </div>
               <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                <button onClick={() => setTermoDe(a)} title="Termo de Doação (Word)" className="p-2 text-text-secondary hover:text-primary-btn"><FileSignature size={16} /></button>
                 <button onClick={() => setRelatorioDe(a)} title="Relatório Social (Word)" className="p-2 text-text-secondary hover:text-primary-btn"><FileText size={16} /></button>
                 <button onClick={() => abrirEditar(a)} title={somenteLeitura ? 'Ver ficha' : 'Editar'} className="p-2 text-text-secondary hover:text-primary-btn"><Pencil size={16} /></button>
                 {!somenteLeitura && <button onClick={() => apagar(a)} title="Apagar" className="p-2 text-text-secondary hover:text-error-expired"><Trash2 size={16} /></button>}
@@ -777,10 +804,10 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                   <textarea rows={3} className={classeInput + ' resize-none'} value={ficha.observacoes || ''} onChange={e => set('observacoes', e.target.value)} /></div>
               </Secao>
 
-              <Secao titulo={`Entregas (${fEntregas.length})`} acao={!somenteLeitura && (
+              <Secao titulo={`Itens — pedidos e entregas (${fEntregas.length})`} acao={!somenteLeitura && (
                 <button type="button" onClick={() => setFEntregas(l => [...l, nova<Entrega>({ item: '', quantidade: 1, data_entrega: null, entregador: null, recibo_assinado: false, obs: null })])}
-                  className="text-xs font-bold text-primary-btn flex items-center gap-1"><Plus size={13} /> Adicionar entrega</button>)}>
-                {fEntregas.length === 0 && <p className="text-text-secondary text-sm italic">Nenhuma entrega registrada.</p>}
+                  className="text-xs font-bold text-primary-btn flex items-center gap-1"><Plus size={13} /> Adicionar item</button>)}>
+                {fEntregas.length === 0 && <p className="text-text-secondary text-sm italic">Nenhum item registrado. Item sem data de entrega fica como pendente.</p>}
                 <div className="space-y-2">
                   {fEntregas.map(e => {
                     const up = <K extends keyof Entrega>(k: K, v: Entrega[K]) => setFEntregas(l => l.map(x => x._k === e._k ? { ...x, [k]: v } : x))
@@ -788,7 +815,8 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                       <div key={e._k} className="grid grid-cols-2 md:grid-cols-12 gap-2 items-end border border-gray-100 bg-surface-card rounded-lg p-3">
                         <div className="col-span-2 md:col-span-3"><Rotulo>Item *</Rotulo><input className={classeInput} list="dl-itens" value={e.item} onChange={ev => up('item', ev.target.value)} /></div>
                         <div className="md:col-span-1"><Rotulo>Qtd.</Rotulo><input type="number" min={0} step="any" className={classeInput} value={e.quantidade} onChange={ev => up('quantidade', Number(ev.target.value))} /></div>
-                        <div className="md:col-span-2"><Rotulo>Data</Rotulo><input type="date" className={classeInput} value={e.data_entrega || ''} onChange={ev => up('data_entrega', ev.target.value || null)} /></div>
+                        <div className="md:col-span-2"><Rotulo>{e.data_entrega ? 'Data da entrega' : 'Entrega pendente'}</Rotulo><input type="date" className={classeInput} value={e.data_entrega || ''} onChange={ev => up('data_entrega', ev.target.value || null)} />
+                          {!e.data_entrega && !somenteLeitura && <button type="button" onClick={() => up('data_entrega', new Date().toLocaleDateString('sv-SE'))} className="text-[11px] font-bold text-primary-btn mt-1">Entregue hoje</button>}</div>
                         <div className="md:col-span-3"><Rotulo>Quem entregou</Rotulo><input className={classeInput} value={e.entregador || ''} onChange={ev => up('entregador', ev.target.value || null)} /></div>
                         <label className="md:col-span-2 flex items-center gap-2 text-sm pb-2 cursor-pointer">
                           <input type="checkbox" checked={e.recibo_assinado} onChange={ev => up('recibo_assinado', ev.target.checked)} /> Recibo assinado
@@ -857,6 +885,17 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {termoDe && (
+        <TermoDoacaoModal atendimento={termoDe} onClose={() => setTermoDe(null)}
+          nMembros={membros.filter(m => m.atendimento_id === termoDe.id).length}
+          itens={entregas.filter(e => e.atendimento_id === termoDe.id)} />
+      )}
+
+      {relacaoAberta && (
+        <RelacaoItensModal onClose={() => setRelacaoAberta(false)} fichas={filtrados} itens={entregas}
+          filtros={[filtroEvento && `Evento: ${filtroEvento}`, filtroSituacao && `Situação: ${SITUACAO_LABEL[filtroSituacao as Situacao]}`, busca && `Busca: ${busca}`].filter(Boolean).join(' · ') || 'sem filtros'} />
       )}
 
       {relatorioDe && (
