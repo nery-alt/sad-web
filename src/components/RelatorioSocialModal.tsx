@@ -111,6 +111,13 @@ export const RelatorioSocialModal: React.FC<Props> = ({ atendimento: a, membros,
             O que estiver entre <b>[[ ]]</b> sai marcado de <span className="bg-yellow-200 px-1">amarelo</span> no Word, para você completar.
           </p>
 
+          {!!a.pessoas_afetadas && a.pessoas_afetadas !== membros.length + 1 && (
+            <p className="text-sm bg-yellow-50 border border-yellow-200 rounded p-2 text-yellow-800">
+              Atenção: a ficha informa {a.pessoas_afetadas} pessoa(s) afetada(s), mas o núcleo familiar tem {membros.length + 1} cadastrada(s)
+              (contando o responsável). Corrija na ficha ou ajuste o texto abaixo.
+            </p>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div><label className={lbl}>Nº do relatório</label>
               <input className={inp} value={numero} onChange={e => setNumero(e.target.value)} placeholder="ex.: 50/2026" /></div>
