@@ -93,7 +93,7 @@ const contem = (todo: string, parte: string) => !!sem(parte) && sem(todo).includ
 function partesLocal(a: AtendimentoSocial): string[] {
   const p: string[] = []
   for (const t of [a.endereco, a.bairro_comunidade]) {
-    const v = (t || '').trim()
+    const v = ajeitarEndereco((t || '').trim())
     if (v && !p.some(x => contem(x, v))) p.push(v)
   }
   return p
@@ -108,15 +108,98 @@ const simNao = (v: string | null): boolean | string | null => {
 }
 const AUXILIO = /^aux[ií]lio/i
 
+// ---------- Padronização do texto digitado na ficha ----------
+// O que a equipe digita no campo (tudo em maiúsculas, sem acento, com erro de digitação) é arrumado só no relatório;
+// a ficha continua guardada do jeito que foi digitada.
+const sem0 = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const SIGLAS = new Set(['CRAS', 'CREAS', 'CAPS', 'SEMASC', 'SEMSA', 'SEMIU', 'SEMDCEP', 'SEMMALP', 'INSS', 'APAE', 'IFAM', 'SEBRAE', 'PGM', 'CPF', 'RG', 'CNH', 'APP', 'NASF', 'SUS', 'UBS', 'UPA', 'BPC', 'LOAS', 'AM', 'BR', 'TV', 'DVD', 'GLP', 'ONG'])
+const PARTICULAS = new Set(['de', 'do', 'da', 'dos', 'das', 'e', 'em', 'na', 'no', 'nas', 'nos'])
+// erros de digitação conhecidos (chave sem acento e em minúsculas)
+const ERROS: Record<string, string> = {
+  intens: 'itens', intem: 'item', impresora: 'impressora', impressoura: 'impressora', geladera: 'geladeira', televizao: 'televisão',
+  esenciais: 'essenciais', esencial: 'essencial', caxa: 'caixa', guardaroupa: 'guarda-roupa', colchau: 'colchão', ventiladô: 'ventilador',
+}
+// palavras comuns digitadas sem acento
+const ACENTOS: Record<string, string> = {
+  agua: 'água', "d'agua": "d'água", colchao: 'colchão', colchoes: 'colchões', fogao: 'fogão', televisao: 'televisão', terreo: 'térreo',
+  comodo: 'cômodo', comodos: 'cômodos', comoda: 'cômoda', familia: 'família', familias: 'famílias', crianca: 'criança', criancas: 'crianças',
+  peca: 'peça', pecas: 'peças', residencia: 'residência', nao: 'não', tambem: 'também', ja: 'já', ate: 'até', documentacao: 'documentação',
+  alimentacao: 'alimentação', saude: 'saúde', medicacao: 'medicação', habitacao: 'habitação', protecao: 'proteção', situacao: 'situação',
+  solicitacao: 'solicitação', vestuario: 'vestuário', eletrodomesticos: 'eletrodomésticos', moveis: 'móveis', movel: 'móvel', lampada: 'lâmpada',
+  maquina: 'máquina', botijao: 'botijão', inundacao: 'inundação', incendio: 'incêndio', construcao: 'construção', reconstrucao: 'reconstrução',
+  eletrica: 'elétrica', basica: 'básica', basico: 'básico', necessarios: 'necessários', necessario: 'necessário', area: 'área', areas: 'áreas',
+  numero: 'número', orgao: 'órgão', orgaos: 'órgãos', beneficio: 'benefício', beneficios: 'benefícios', sofa: 'sofá', aluminio: 'alumínio',
+}
+const TOKEN = /[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu
+const emMaiusculas = (w: string) => w.length > 1 && w === w.toUpperCase() && w !== w.toLowerCase()
+const capitalizar = (w: string) => w.charAt(0).toUpperCase() + w.slice(1)
+
+function ajeitarPalavras(s: string, nomes: Set<string>, titulo: boolean): string {
+  const letras = s.replace(/[^\p{L}]/gu, '')
+  // linha digitada toda em maiúsculas: até o "O", "A" e "E" soltos viram minúsculos
+  const gritando = letras.length >= 4 && letras.replace(/\P{Lu}/gu, '').length / letras.length >= 0.7
+  return s.replace(TOKEN, (w, pos: number) => {
+    if (/\d/.test(w)) return w
+    if (w.length === 1) return gritando && !titulo && 'AOE'.includes(w) ? w.toLowerCase() : w
+    const k = sem0(w).replace('’', "'")
+    if (SIGLAS.has(k.toUpperCase())) return k.toUpperCase()
+    if (emMaiusculas(w) && /^[IVXLC]+$/.test(w)) return w                       // algarismo romano (CRAS I)
+    let base = w
+    const troca = ERROS[k] ?? (ACENTOS[k] && w.toLowerCase() === k ? ACENTOS[k] : undefined)
+    if (troca) base = w.charAt(0) === w.charAt(0).toUpperCase() && w.charAt(0) !== w.charAt(0).toLowerCase() && !emMaiusculas(w) ? capitalizar(troca) : troca
+    if (!emMaiusculas(w)) return base
+    base = base.toLowerCase()
+    if (nomes.has(k)) return capitalizar(base)                                  // nome de pessoa da ficha
+    if (titulo) return PARTICULAS.has(k) && pos > 0 ? base : capitalizar(base)
+    return base
+  })
+}
+
+function ajeitarLinha(s: string, nomes: Set<string>, titulo: boolean): string {
+  let t = s.replace(/[`´]/g, "'").replace(/\s+/g, ' ').replace(/\s+([,.;:!?])/g, '$1').trim()
+  t = ajeitarPalavras(t, nomes, titulo)
+  t = t.replace(/\bguarda[\s-]roupa\b/gi, 'guarda-roupa').replace(/\b(seu|sua)\s+vestu[aá]rios\b/gi, '$1 vestuário')
+    .replace(/\bgabinete do prefeito\b/gi, 'Gabinete do Prefeito').replace(/\bdefesa civil\b/gi, 'Defesa Civil')
+  if (!titulo) t = t.replace(/^([^\p{L}\p{N}]*)(\p{L})/u, (_m, a: string, b: string) => a + b.toUpperCase()).replace(/([.!?]\s+)(\p{Ll})/gu, (_m, a: string, b: string) => a + b.toUpperCase())
+  else t = t.replace(/^([^\p{L}\p{N}]*)(\p{L})/u, (_m, a: string, b: string) => a + b.toUpperCase())
+  return t
+}
+const conjuntoNomes = (nomes: string[]) => new Set(nomes.flatMap(n => n.split(/\s+/)).map(sem0).filter(p => p.length > 2 && !PARTICULAS.has(p)))
+// texto livre (uma ou várias linhas): frases com inicial maiúscula, sem GRITAR
+export function ajeitarTexto(texto: string, nomes: string[] = []): string {
+  const N = conjuntoNomes(nomes)
+  return texto.split('\n').map(l => ajeitarLinha(l, N, false)).filter(Boolean).join('\n')
+}
+// endereço, bairro, comunidade: cada palavra com inicial maiúscula (de, do, da... ficam minúsculas)
+export const ajeitarEndereco = (texto: string) => ajeitarLinha(texto, new Set(), true)
+// "01. GELADEIRA" -> "01 geladeira"; sem repetir a mesma linha
+function ajeitarLista(texto: string, nomes: string[]): string[] {
+  const N = conjuntoNomes(nomes), vistos = new Set<string>(), r: string[] = []
+  for (const bruta of texto.split('\n')) {
+    const l = ajeitarLinha(bruta.trim().replace(/^[-•]\s*/, '').replace(/^(\d+)\s*[.)\-–]\s*/, '$1 ').replace(/[.,;]+$/, ''), N, false)
+    const k = sem(l)
+    if (l && !vistos.has(k)) { vistos.add(k); r.push(l) }
+  }
+  return r
+}
+// o item da solicitação já está dito (com quantidade) no "material solicitado"?
+function jaDito(todo: string, item: string): boolean {
+  const t = sem(todo), i = sem(item)
+  return !!i && t.includes(i.slice(0, Math.max(5, i.length - 2)))
+}
+const comPonto = (s: string) => { const t = s.trim().replace(/[,;]+$/, ''); return !t ? '' : /[.!?:]$/.test(t) ? t : t + '.' }
+
 const TIPIF: Record<string, string> = { deslizamento: 'deslizamento', tempestade: 'tempestade', incendio: 'incêndio', alagamento: 'alagamento' }
 const RESID: Record<string, string> = { alvenaria: 'alvenaria', madeira: 'madeira', misto: 'material misto (alvenaria e madeira)', barro: 'barro' }
 const PROP: Record<string, string> = { propria: 'de propriedade da família', cedida: 'cedido', alugada: 'alugado' }
 
 // ---------- Rascunho ----------
 export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], entregas: EntregaSocial[], encs: EncaminhamentoSocial[], grupos: GrupoSocial[] = []): SecaoSocial[] {
+  const nomesFicha = [a.resp_nome, ...membros.map(m => m.nome), ...grupos.map(g => g.nome || '')].filter(Boolean)
+  const aj = (t: string) => ajeitarTexto(t, nomesFicha)
   // 1. Identificação da ocorrência
-  const tip = (a.tipificacao || []).map(t => t === 'outros' ? (a.tipificacao_outros || '').trim() : TIPIF[t]).filter(Boolean)
-  const fato = tip.length ? lista(tip) : (a.evento || '').trim() ? minuscula(a.evento.trim()) : faltou('informar o evento')
+  const tip = (a.tipificacao || []).map(t => t === 'outros' ? aj((a.tipificacao_outros || '').trim()) : TIPIF[t]).filter(Boolean)
+  const fato = tip.length ? lista(tip) : (a.evento || '').trim() ? minuscula(aj(a.evento.trim())) : faltou('informar o evento')
   const local = partesLocal(a).join(', ')
   const zona = a.area_afetada === 'urbana' ? 'zona urbana' : a.area_afetada === 'rural' ? 'zona rural' : ''
   const quando = a.data_ocorrencia
@@ -125,13 +208,13 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
   const onde = [local ? `em ${local}` : '', zona ? `${zona} do município de Tefé/AM` : 'no município de Tefé/AM'].filter(Boolean).join(', ')
   const intro = `O presente Relatório Social tem por finalidade apresentar a análise da situação vivenciada por família atingida por ${fato}, ${quando}, ${onde}.`
   const casa: string[] = []
-  const tipoRes = a.tipo_residencia === 'outros' ? (a.tipo_residencia_outros || '').trim() : a.tipo_residencia ? RESID[a.tipo_residencia] : ''
+  const tipoRes = a.tipo_residencia === 'outros' ? aj((a.tipo_residencia_outros || '').trim()) : a.tipo_residencia ? RESID[a.tipo_residencia] : ''
   if (a.tipo_imovel || tipoRes || a.propriedade || a.comodos) {
     casa.push(`O imóvel é ${a.tipo_imovel === 'comercial' ? 'comercial' : 'residencial'}${tipoRes ? `, construído em ${tipoRes}` : ''}${a.propriedade ? `, ${PROP[a.propriedade]}` : ''}${a.comodos ? `, com ${plural(a.comodos, 'cômodo', 'cômodos')}` : ''}.`)
   }
-  if (a.ponto_referencia && !contem(local, a.ponto_referencia)) casa.push(`Ponto de referência: ${a.ponto_referencia.trim()}.`)
+  if (a.ponto_referencia && !contem(local, a.ponto_referencia)) casa.push(`Ponto de referência: ${comPonto(ajeitarEndereco(a.ponto_referencia.trim()))}`)
   // o que a equipe anotou nas observações da ficha (estado da casa etc.) é o que foi observado no local
-  const observado = (a.observacoes || '').trim()
+  const observado = aj((a.observacoes || '').trim()).split('\n').map(comPonto).join('\n')
   const s1 = [intro, ...casa, observado || faltou('descrever o que foi observado no local durante a visita')]
 
   // 2. Descrição da situação
@@ -142,8 +225,8 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
   }
   const abr = (a.abrigo || []).map(x => x === 'desabrigados' ? 'desabrigada' : 'desalojada')
   if (abr.length) s2.push(`A família encontra-se ${lista(abr)}.`)
-  const perdas = (a.danos_materiais || '').split('\n').map(x => x.trim()).filter(Boolean)
-  if (perdas.length) s2.push('Descrição das perdas materiais:', ...perdas.map(x => `• ${x.replace(/^[-•]\s*/, '')}`))
+  const perdas = ajeitarLista(a.danos_materiais || '', nomesFicha)
+  if (perdas.length) s2.push('Descrição das perdas materiais:', ...perdas.map(x => `• ${x}`))
   s2.push(faltou('relato dos moradores e observações da equipe sobre como o fato ocorreu'))
 
   // 3. Condições socioeconômicas
@@ -167,7 +250,7 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
   if (infra.length) s3.push(`Quanto à infraestrutura, a residência ${infra.join('; ')}.`)
   const ROTULO_GRUPO: Record<string, string> = { idoso: 'idoso', gestante: 'gestante', lactante: 'lactante', pcd: 'pessoa com deficiência' }
   const prioritarios = grupos.map(g => {
-    const nome = (g.nome || '').trim(), det = (g.detalhe || '').trim()
+    const nome = (g.nome || '').trim(), det = ajeitarTexto((g.detalhe || '').trim(), nomesFicha).replace(/\.$/, '')
     return `${ROTULO_GRUPO[g.tipo] || g.tipo}${nome ? ' ' + nome.toUpperCase() : ''}${det ? ` (${det})` : ''}`
   })
   // fichas antigas só têm as marcações simples
@@ -186,17 +269,19 @@ export function montarRascunho(a: AtendimentoSocial, membros: MembroSocial[], en
   // 5. Medidas de proteção social
   const s5: string[] = []
   const sol = a.solicitacoes || []
+  const materialTxt = aj((a.material_solicitado || '').trim()).replace(/\n+/g, '; ')
   const aluguel = sol.find(x => /aluguel/i.test(x))
   const auxilios = sol.filter(x => !/aluguel/i.test(x) && AUXILIO.test(x.trim())).map(minuscula)
-  const outras = sol.filter(x => !/aluguel/i.test(x) && !AUXILIO.test(x.trim())).map(minuscula)
+  // o que já está no "material solicitado" (com quantidade) não repete na lista de solicitações
+  const outras = sol.filter(x => !/aluguel/i.test(x) && !AUXILIO.test(x.trim()) && !jaDito(materialTxt, x)).map(minuscula)
   if (aluguel) s5.push('Recomenda-se a inclusão prioritária da família em programa de Aluguel Social, garantindo moradia provisória digna até a recuperação ou reconstrução da residência.')
   if (auxilios.length) s5.push(`Solicita-se a concessão ${auxilios.length === 1 ? 'do benefício eventual' : 'dos benefícios eventuais'}: ${lista(auxilios)}.`)
   if (outras.length) s5.push(`Solicita-se o atendimento emergencial com: ${lista(outras)}.`)
-  if ((a.material_solicitado || '').trim()) s5.push(`Material solicitado: ${a.material_solicitado!.trim()}.`)
-  if (entregas.length) s5.push(`Já foram realizadas as seguintes entregas: ${entregas.map(e => `${e.item} (${e.quantidade})${e.data_entrega ? ` em ${dataCurta(e.data_entrega)}` : ''}`).join('; ')}.`)
+  if (materialTxt) s5.push(`Material solicitado: ${comPonto(materialTxt)}`)
+  if (entregas.length) s5.push(`Já foram realizadas as seguintes entregas: ${entregas.map(e => `${aj(e.item)} (${e.quantidade})${e.data_entrega ? ` em ${dataCurta(e.data_entrega)}` : ''}`).join('; ')}.`)
   const orgaos = [...new Set(encs.map(e => e.orgao.trim()).filter(Boolean))]
   for (const e of encs.filter(x => (x.obs || '').trim())) {
-    const o = e.orgao.trim(), ob = (e.obs || '').trim().replace(/\.$/, '')
+    const o = e.orgao.trim(), ob = aj((e.obs || '').trim()).replace(/\.$/, '')
     s5.push(sem(ob).startsWith(sem(o)) ? `Encaminhamento ${artigo(o)} ${ob}.` : `Encaminhamento ${artigo(o)} ${o}: ${ob}.`)
   }
   s5.push(`Este relatório é encaminhado, em caráter de urgência, ${orgaos.length ? lista(orgaos.map(o => `${artigo(o)} ${o}`)) : faltou('informar os órgãos: CRAS, SEMASC, SEMIU…')}, para ciência e adoção das providências cabíveis, em conformidade com a Lei nº 12.608/2012 e demais normativas aplicáveis à proteção e defesa dos cidadãos atingidos por desastres.`)
