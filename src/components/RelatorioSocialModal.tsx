@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react'
 import { X, FileDown, ImagePlus, Trash2 } from 'lucide-react'
 import { recortarFoto, reduzirFoto } from '../lib/laudoAlvara'
 import {
-  VISTOS, SIGNATARIOS_SOCIAL, montarRascunho, montarIdentificacao, gerarRelatorioSocial, nomeArquivoRelatorioSocial,
+  VISTOS, SIGNATARIOS_SOCIAL, ajeitarTexto, montarRascunho, montarIdentificacao, gerarRelatorioSocial, nomeArquivoRelatorioSocial,
   type AtendimentoSocial, type MembroSocial, type EntregaSocial, type EncaminhamentoSocial, type GrupoSocial, type SecaoSocial,
 } from '../lib/relatorioSocial'
 
@@ -77,7 +77,7 @@ export const RelatorioSocialModal: React.FC<Props> = ({ atendimento: a, membros,
       const doc = await gerarRelatorioSocial({
         numero: numero.trim() || '____/' + dataEmissao.slice(0, 4),
         solicitante: a.resp_nome.trim().toUpperCase(),
-        ocorrencia: (a.evento || '').trim() || 'Atendimento social',
+        ocorrencia: ajeitarTexto((a.evento || '').trim()) || 'Atendimento social',
         identificacao: montarIdentificacao(a, membros, { hora: hora ? `${hh}h${mm}min` : '', equipe, dataVisita: a.data_visita }),
         secoes,
         // com duas pessoas, a primeira da lista sai à direita: a assistente social fica à esquerda
