@@ -537,7 +537,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
         ) : filtrados.map(a => {
           const ents = entregasDe.get(a.id) || []
           return (
-            <div key={a.id} className="bg-white border border-gray-200 rounded-lg p-3 flex items-start gap-3">
+            <div key={a.id} onClick={() => abrirEditar(a)} className="bg-white border border-gray-200 rounded-lg p-3 flex items-start gap-3 cursor-pointer hover:border-primary-btn/40">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-bold">{a.resp_nome}</span>
@@ -558,7 +558,7 @@ export const Atendimentos: React.FC<Props> = ({ somenteLeitura }) => {
                     : ents.map(e => `${e.item}: ${e.quantidade}`).join(' · ')}
                 </div>
               </div>
-              <div className="flex gap-1 shrink-0">
+              <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                 <button onClick={() => setRelatorioDe(a)} title="Relatório Social (Word)" className="p-2 text-text-secondary hover:text-primary-btn"><FileText size={16} /></button>
                 <button onClick={() => abrirEditar(a)} title={somenteLeitura ? 'Ver ficha' : 'Editar'} className="p-2 text-text-secondary hover:text-primary-btn"><Pencil size={16} /></button>
                 {!somenteLeitura && <button onClick={() => apagar(a)} title="Apagar" className="p-2 text-text-secondary hover:text-error-expired"><Trash2 size={16} /></button>}
