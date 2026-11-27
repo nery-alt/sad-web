@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from 'react'
 import { X, FileDown, ImagePlus, Trash2 } from 'lucide-react'
 import { recortarFoto, reduzirFoto } from '../lib/laudoAlvara'
 import {
-  VISTOS, SIGNATARIOS_SOCIAL, ajeitarTexto, montarRascunho, montarIdentificacao, gerarRelatorioSocial, nomeArquivoRelatorioSocial,
+  VISTOS, SIGNATARIOS_SOCIAL, ASPECTO_FOTO_SOCIAL, ajeitarTexto, montarRascunho, montarIdentificacao, gerarRelatorioSocial, nomeArquivoRelatorioSocial,
   type AtendimentoSocial, type MembroSocial, type EntregaSocial, type EncaminhamentoSocial, type GrupoSocial, type SecaoSocial,
 } from '../lib/relatorioSocial'
 
@@ -73,7 +73,7 @@ export const RelatorioSocialModal: React.FC<Props> = ({ atendimento: a, membros,
       const equipe = SIGNATARIOS_SOCIAL.filter(s => assinam.includes(s.id))
       const [hh, mm] = hora.split(':')
       const fotosRel = []
-      for (const f of fotos) fotosRel.push({ bytes: await recortarFoto(f.arquivo), legenda: ajeitarLegenda(f.legenda) })
+      for (const f of fotos) fotosRel.push({ bytes: await recortarFoto(f.arquivo, ASPECTO_FOTO_SOCIAL, 1600), legenda: ajeitarLegenda(f.legenda) })
       const doc = await gerarRelatorioSocial({
         numero: numero.trim() || '____/' + dataEmissao.slice(0, 4),
         solicitante: a.resp_nome.trim().toUpperCase(),
@@ -156,7 +156,7 @@ export const RelatorioSocialModal: React.FC<Props> = ({ atendimento: a, membros,
               {fotos.map((f, k) => (
                 <div key={f.id} className="border border-gray-200 rounded p-2 flex flex-col gap-2">
                   <div className="text-[11px] font-bold text-text-secondary">Foto {String(k + 1).padStart(2, '0')}</div>
-                  <img src={f.url} alt={`Foto ${k + 1}`} className="w-full aspect-[10/11] object-cover rounded" />
+                  <img src={f.url} alt={`Foto ${k + 1}`} className="w-full aspect-[4/3] object-cover rounded" />
                   <input className="w-full p-1 border border-gray-200 rounded text-xs" placeholder="Legenda (ex.: Frente da residência)"
                     value={f.legenda} onChange={e => setFotos(l => l.map(x => x.id === f.id ? { ...x, legenda: e.target.value } : x))} />
                   <button type="button" onClick={() => tirarFoto(f.id)} className="text-xs text-error-expired flex items-center gap-1"><Trash2 size={12} /> Tirar</button>
